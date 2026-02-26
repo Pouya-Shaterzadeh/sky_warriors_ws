@@ -72,11 +72,11 @@ for i in $(seq 0 $((NUM_VEHICLES - 1))); do
     
     echo "[$i] Spawning vehicle at ($x_pos, $y_pos)..."
     
-    # Use standalone mode to connect to existing Gazebo
     PX4_GZ_STANDALONE=1 \
     PX4_SIM_SPEED_FACTOR=$SPEED_FACTOR \
     PX4_GZ_WORLD=warehouse1 \
-    PX4_SYS_AUTOSTART=4001 \
+    PX4_SYS_AUTOSTART=4010 \
+    PX4_SIM_MODEL="gz_${VEHICLE_MODEL}" \
     PX4_GZ_MODEL_POSE="$x_pos,$y_pos" \
     PX4_GZ_MODEL="${VEHICLE_MODEL}" \
     GZ_SIM_RESOURCE_PATH="$GZ_SIM_RESOURCE_PATH" \

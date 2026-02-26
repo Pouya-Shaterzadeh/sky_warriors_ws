@@ -7,7 +7,7 @@ set -e
 # Configuration
 NUM_VEHICLES=${1:-3}
 VEHICLE_MODEL=${2:-x500}
-WORLD_FILE="$(dirname "$0")../world/warehouse1.sdf"
+WORLD_FILE="$(dirname "$0")/world/warehouse1.sdf"
 PX4_DIR="${HOME}/PX4-Autopilot"
 
 echo "=========================================="
@@ -107,9 +107,10 @@ for i in $(seq 0 $((NUM_VEHICLES - 1))); do
         # First instance: Start gz sim with world (NO standalone mode)
         echo "  Command: PX4_SYS_AUTOSTART=4001 PX4_GZ_MODEL_POSE=\"$x_pos,$y_pos\" PX4_GZ_MODEL=${VEHICLE_MODEL} ./build/px4_sitl_default/bin/px4 -i $instance"
         
-        PX4_SYS_AUTOSTART=4001 \
+        PX4_SYS_AUTOSTART=4010 \
         PX4_GZ_MODEL_POSE="$x_pos,$y_pos" \
         PX4_GZ_MODEL=${VEHICLE_MODEL} \
+        PX4_SIM_MODEL="gz_${VEHICLE_MODEL}" \
         PX4_GZ_WORLD=$(basename ${WORLD_FILE} .sdf) \
         ./build/px4_sitl_default/bin/px4 -i $instance &
         
@@ -131,9 +132,10 @@ for i in $(seq 0 $((NUM_VEHICLES - 1))); do
         # Subsequent instances: Connect to existing gz server
         echo "  Command: PX4_SYS_AUTOSTART=4001 PX4_GZ_MODEL_POSE=\"$x_pos,$y_pos\" PX4_GZ_MODEL=${VEHICLE_MODEL} ./build/px4_sitl_default/bin/px4 -i $instance"
         
-        PX4_SYS_AUTOSTART=4001 \
+        PX4_SYS_AUTOSTART=4010 \
         PX4_GZ_MODEL_POSE="$x_pos,$y_pos" \
         PX4_GZ_MODEL=${VEHICLE_MODEL} \
+        PX4_SIM_MODEL="gz_${VEHICLE_MODEL}" \
         ./build/px4_sitl_default/bin/px4 -i $instance &
         
         echo "  PID: $!"
