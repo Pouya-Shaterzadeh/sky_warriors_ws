@@ -1,56 +1,46 @@
-# Failsafe Testing for Sky Warrior
+# Failsafe Testing for Sky Warrior (Gazebo Classic 11)
+# ====================================================
 
-This folder contains failsafe testing scripts and documentation for the Sky Warrior drone swarm.
+This folder contains the automated end-to-end failsafe testing architecture for the Sky Warrior drone swarm.
+It uses the MAVSDK Python Failure API interacting with PX4 SITL and Gazebo Classic 11.
 
-## Overview
+## Architecture
 
-Testing failsafe behaviors using Gazebo Harmonic + PX4 1.17 with manual injection and ROS 2 integration.
+The failsafe architecture consists of three layers:
 
-## Testing Methods
+1. **`failsafe_manager.py`**: A core class (`FailsafeManager`) handling MAVSDK connection, parameter configuration (enabling `SYS_FAILURE_EN`), failure injection via `drone.failure.inject()`, health validation, taking off, and telemetry monitoring for transition states (like entering `RETURN_TO_LAUNCH`).
+2. **`failsafe_tests.py`**: A pytest-based suite containing specific test scenarios (GPS failure, Battery critical, RC Loss, sensor degraded states). Each test relies on the `FailsafeManager` to automate the process (Setup -> Inject -> Detect -> Verify -> Recover).
+3. **`run_failsafe_tests.py`**: A CLI runner to trigger all or specific tests without needing to invoke `pytest` manually.
 
-### Method 1: MAVLink Commander (Simplest)
-Use QGroundControl or MAVSDK to:
-1. Arm and takeoff
-2. Start mission/offboard mode
-3. Inject failures via MAVLink commands
-4. Observe failsafe response
+### Auxiliary Components
+- **`parameters/failsafe_config.yaml`**: Centralized configuration handling PX4 failure parameters and default test timeouts.
+- **`failsafe_monitor_ros2.py`**: A passive ROS2 node that listens to PX4's topics (like `/fmu/out/vehicle_status`) to log structured JSON events when failsafe state transitions occur.
 
-### Method 2: ROS 2 Service Calls
-Use PX4 ROS 2 topics to inject sensor failures programmatically.
+## Quick Start (Automated Testing)
 
-### Method 3: Gazebo Plugin Manipulation
-Directly manipulate sensor plugins in Gazebo Harmonic.
+### 1. Prerequisites
+- `pip install mavsdk pytest pyyaml`
+- Ensure Gazebo Classic 11 (`gazebo`) and PX4 SITL (`make px4_sitl gazebo-classic`) are launched, and a drone is spawned.
 
-## Failsafe Types to Test
+### 2. Run Tests
+Use the provided CLI tool inside `scripts/`:
 
-### 1. GPS Failure
-- **Expected Behavior**: RTL -> Land if GPS lost during mission
-- **Test Command**: See `scripts/test_gps_loss.sh`
+```bash
+cd ~/sky_warriors_ws/src/failsafes/scripts
+python3 run_failsafe_tests.py --all
+```
 
-### 2. Battery Low
-- **Expected Behavior**: RTL when battery < threshold
-- **Test Command**: Modify battery parameters
+To run a specific test:
+```bash
+python3 run_failsafe_tests.py --test gps_loss
+```
 
-### 3. RC Loss
-- **Expected Behavior**: Continue mission or RTL based on params
-- **Parameters**: 
-  - `COM_RCL_EXCEPT` - RC loss exceptions
-  - `NAV_RCL_ACT` - RC loss action
+To list tests:
+```bash
+python3 run_failsafe_tests.py --list
+```
 
-### 4. Datalink Loss
-- **Expected Behavior**: Continue for timeout, then RTL
-- **Parameters**:
-  - `COM_DL_LOSS_T` - Datalink loss time
-  - `NAV_DLL_ACT` - Datalink loss action
-
-### 5. Geofence Breach
-- **Expected Behavior**: RTL or Land
-- **Parameters**: `GF_ACTION`
-
-## Quick Start
-
-See individual test scripts in `scripts/` folder.
-
-## References
-- [PX4 Failsafe Documentation](https://docs.px4.io/main/en/config/safety.html)
-- [PX4 Parameters Reference](https://docs.px4.io/main/en/advanced_config/parameter_reference.html)
+## Important Considerations (Gazebo Classic 11)
+- The scripts connect by default to `udpin://0.0.0.0:14540`.
+- The `SYS_FAILURE_EN` parameter **must** be set to `1` in PX4. The `FailsafeManager` attempts to set this automatically during connection setup.
+- MAVSDK's `failure.inject(FailureUnit, FailureType)` is a blocking call. If `SYS_FAILURE_EN` is 0, the injection call will timeout. The test suite handles this gracefully by wrapping the call in an `asyncio.timeout`.
