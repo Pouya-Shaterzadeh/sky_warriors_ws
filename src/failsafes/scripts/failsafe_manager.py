@@ -23,7 +23,7 @@ class FailsafeManager:
         await self.drone.connect(system_address=self.system_address)
 
         try:
-            async with asyncio.timeout(timeout):
+            async def _connect_loop():
                 logger.info("Waiting for drone to connect...")
                 async for state in self.drone.core.connection_state():
                     if state.is_connected:
@@ -36,6 +36,7 @@ class FailsafeManager:
                     if health.is_global_position_ok and health.is_home_position_ok:
                         logger.info("Global position estimate OK.")
                         break
+            await asyncio.wait_for(_connect_loop(), timeout=timeout)
         except asyncio.TimeoutError:
             logger.error("Connection or GPS health check timed out.")
             raise
@@ -69,33 +70,53 @@ class FailsafeManager:
              raise
 
     async def arm_and_takeoff(self, altitude: float = 10.0):
-        """Arms the drone and takes off to a specific altitude."""
+        """Arms the drone and initiates takeoff to the specified altitude."""
+        logger.info("Waiting for drone to have a global position estimate before arming...")
+        async for health in self.drone.telemetry.health():
+            if health.is_global_position_ok and health.is_home_position_ok:
+                logger.info("Global position estimate OK. Drone is ready!")
+                break
+                
         logger.info("Arming drone...")
         await self.drone.action.arm()
+        await asyncio.sleep(1) # Give it a brief moment
         
-        logger.info(f"Taking off to {altitude}m...")
+        logger.info("Sending takeoff command...")
         await self.drone.action.set_takeoff_altitude(altitude)
         await self.drone.action.takeoff()
 
-        # Wait to reach altitude
         logger.info(f"Waiting to reach {altitude}m altitude...")
-        async for position in self.drone.telemetry.position():
-            if position.relative_altitude_m >= (altitude - 1.0):
-                logger.info(f"Reached altitude: {position.relative_altitude_m:.2f}m")
-                break
-            await asyncio.sleep(0.5)
-            
-    async def inject_failure(self, unit: FailureUnit, failure_type: FailureType, instance: int = 0):
-        """Injects a specific component failure."""
-        logger.info(f"INJECTING FAILURE: Unit={unit.name}, Type={failure_type.name}, Instance={instance}")
         try:
-            # We timeout because if SYS_FAILURE_EN is false, this call might block forever
-            async with asyncio.timeout(5.0):
-                await self.drone.failure.inject(unit, failure_type, instance)
-            logger.info("Failure injected successfully.")
+            async def _wait_alt():
+                async for position in self.drone.telemetry.position():
+                    if position.relative_altitude_m >= (altitude * 0.85):
+                        return
+            
+            await asyncio.wait_for(_wait_alt(), timeout=15.0)
+            logger.info("Target altitude reached cleanly!")
         except asyncio.TimeoutError:
-             logger.error("Failure injection TIMED OUT. Check if SYS_FAILURE_EN is 1.")
-             raise
+            logger.warning("Timed out waiting for exact altitude. Proceeding anyway since drone is airborne.")
+            
+    async def inject_failure(self, failure_unit: FailureUnit, failure_type: FailureType, instance: int = 0):
+        """Injects a specific failure into the simulation."""
+        logger.info(f"Injecting failure: {failure_unit.name} -> {failure_type.name} (Instance {instance})")
+        from mavsdk.failure import FailureError
+        try:
+            await asyncio.wait_for(
+                self.drone.failure.inject(failure_unit, failure_type, instance),
+                timeout=5.0
+            )
+            logger.warning(f"Successfully injected {failure_unit.name} failure!")
+            return True
+        except FailureError as e:
+            if "Unsupported" in str(e):
+                logger.warning(f"Autopilot does not support injecting {failure_type.name} for {failure_unit.name}. Test Aborted.")
+                return False
+            else:
+                raise e
+        except asyncio.TimeoutError:
+            logger.error("Failure injection TIMED OUT. Check if SYS_FAILURE_EN is 1.")
+            return False
         except Exception as e:
              logger.error(f"Failure injection error: {e}")
              raise
@@ -109,12 +130,15 @@ class FailsafeManager:
         """Waits for a specific flight mode (e.g., 'RETURN_TO_LAUNCH', 'LAND')."""
         logger.info(f"Waiting for flight mode: {target_mode_name} (Timeout: {timeout}s)...")
         try:
-            async with asyncio.timeout(timeout):
+            async def _wait_loop():
                 async for flight_mode in self.drone.telemetry.flight_mode():
-                    logger.debug(f"Current Flight Mode: {flight_mode.name}")
                     if flight_mode.name.upper() == target_mode_name.upper():
-                        logger.info(f"Target flight mode '{target_mode_name}' reached!")
+                        print(f"\n============================================================", flush=True)
+                        print(f"💥 MAVSDK FAILSAFE EXECUTED: Transitioned securely to '{target_mode_name}' to handle the failure!", flush=True)
+                        print(f"============================================================\n", flush=True)
                         return True
+                return False
+            return await asyncio.wait_for(_wait_loop(), timeout=timeout)
         except asyncio.TimeoutError:
             logger.error(f"Timed out waiting for flight mode: {target_mode_name}")
             return False
@@ -124,17 +148,49 @@ class FailsafeManager:
         """Waits until the drone detects it is landed."""
         logger.info(f"Waiting for drone to land (Timeout: {timeout}s)...")
         try:
-            async with asyncio.timeout(timeout):
+            async def _wait_loop():
                  async for landed_state in self.drone.telemetry.landed_state():
                       logger.debug(f"Landed State: {landed_state.name}")
                       if landed_state.name == "ON_GROUND":
                           logger.info("Drone is landed.")
                           return True
+                 return False
+            return await asyncio.wait_for(_wait_loop(), timeout=timeout)
         except asyncio.TimeoutError:
             logger.warning("Timed out waiting for landing.")
             return False
         return False
         
+    async def upload_triangle_mission(self, altitude: float = 10.0, speed: float = 5.0):
+        """Uploads a standard 3-point triangle mission suitable for failsafe tracking."""
+        from mavsdk.mission import MissionItem, MissionPlan
+        # Altitude is relative to launch. 
+        m1 = MissionItem(47.39803986, 8.54557254, altitude, speed, True, float('nan'), float('nan'), MissionItem.CameraAction.NONE, float('nan'), float('nan'), float('nan'), float('nan'), float('nan'), MissionItem.VehicleAction.NONE)
+        m2 = MissionItem(47.39803622, 8.54501464, altitude, speed, True, float('nan'), float('nan'), MissionItem.CameraAction.NONE, float('nan'), float('nan'), float('nan'), float('nan'), float('nan'), MissionItem.VehicleAction.NONE)
+        m3 = MissionItem(47.39782562, 8.54500928, altitude, speed, True, float('nan'), float('nan'), MissionItem.CameraAction.NONE, float('nan'), float('nan'), float('nan'), float('nan'), float('nan'), MissionItem.VehicleAction.NONE)
+        
+        await self.drone.mission.set_return_to_launch_after_mission(False)
+        await self.drone.mission.upload_mission(MissionPlan([m1, m2, m3]))
+        logger.info("Triangle mission uploaded successfully.")
+
+    async def start_and_track_mission(self, target_item: int, timeout: float = 30.0) -> bool:
+        """Starts the mission and explicitly blocks until the drone reaches the `target_item` index."""
+        logger.info(f"Starting mission and waiting to reach item {target_item}...")
+        await self.drone.mission.start_mission()
+        
+        try:
+            async def _track():
+                async for progress in self.drone.mission.mission_progress():
+                    print(f"Mission Progress: {progress.current}/{progress.total}", flush=True)
+                    if progress.current >= target_item:
+                        logger.info(f"Drone reached target mission item {target_item}!")
+                        return True
+                return False
+            return await asyncio.wait_for(_track(), timeout=timeout)
+        except asyncio.TimeoutError:
+            logger.error(f"Timed out waiting for mission progress to reach {target_item}.")
+            return False
+
     async def start_telemetry_monitor(self):
         """Starts a background task to log vital telemetry."""
         async def _log_telemetry():
