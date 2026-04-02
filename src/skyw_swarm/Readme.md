@@ -34,7 +34,7 @@ ros2 run skyw_swarm px4_pose_bridge.py
 
 Terminal2
 source install/setup.bash
-ros2 run skyw_swarm formation_server.py --ros-args -p drone_count:=2
+ros2 run skyw_swarm formation_server.py --ros-args -p drone_count:=3
 
 Terminal3
 source install/setup.bash
@@ -58,6 +58,20 @@ ros2 launch skyw_swarm swarm_behavior.launch.py
 
 # Offboard bridge launch (PX4 setpoints)
 ros2 launch skyw_swarm swarm_offboard.launch.py
+
+# Full mission scenario (recommended for SITL demo)
+# - Starts pose bridge + formation server + offboard bridge
+# - Sends takeoff-like goal to 5m, then transitions to line formation
+ros2 launch skyw_swarm swarm_mission_scenario.launch.py
+
+# Scenario customization
+ros2 launch skyw_swarm swarm_mission_scenario.launch.py \
+    drone_count:=3 \
+    takeoff_altitude:=5.0 \
+    mission_altitude:=5.0 \
+    mission_spacing:=2.0 \
+    initial_goal_delay_s:=3.0 \
+    mission_delay_s:=8.0
 
 # Launch with YAML + client auto-start
 ros2 launch skyw_swarm swarm_launch.py \

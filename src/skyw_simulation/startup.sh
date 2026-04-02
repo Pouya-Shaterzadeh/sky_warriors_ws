@@ -7,7 +7,11 @@ PX4_DIR="${HOME}/PX4-Autopilot"
 PX4_BIN="${PX4_DIR}/build/px4_sitl_default/bin/px4"
 PX4_GZ_MODELS="${PX4_DIR}/Tools/simulation/gz/models"
 PX4_GZ_WORLDS="${PX4_DIR}/Tools/simulation/gz/worlds"
+PX4_GZ_PLUGINS="${PX4_DIR}/build/px4_sitl_default/src/modules/simulation/gz_plugins"
+PX4_GZ_SERVER_CONFIG="${PX4_DIR}/src/modules/simulation/gz_bridge/server.config"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CUSTOM_WORLD_DIR_DEFAULT="${SCRIPT_DIR}/world"
+CUSTOM_WORLD_FILE="${1:-}"
 RMW_FASTRTPS_USE_QOS_FROM_XML=1
 FASTDDS_DEFAULT_PROFILES_FILE=/home/roboticistprogrammer/sky_warrior_ws/src/skyw_swarm/config/fastdds.xml
 
@@ -15,11 +19,61 @@ echo "PX4 directory: ${PX4_DIR}"
 echo "Session name: ${session}"
 echo "Fast DDS profile: ${FASTDDS_DEFAULT_PROFILES_FILE}"
 
-# Use only PX4 Gazebo resources to avoid stale paths from previously sourced shells.
-if [ -d "${PX4_GZ_MODELS}" ] && [ -d "${PX4_GZ_WORLDS}" ]; then
-	export GZ_SIM_RESOURCE_PATH="${PX4_GZ_MODELS}:${PX4_GZ_WORLDS}"
-elif [ -d "${PX4_GZ_MODELS}" ]; then
-	export GZ_SIM_RESOURCE_PATH="${PX4_GZ_MODELS}"
+# Compose Gazebo resources while preserving any custom paths from the current shell.
+GZ_RESOURCE_PATHS=""
+append_resource_path() {
+	local candidate="$1"
+	if [ -n "${candidate}" ] && [ -d "${candidate}" ]; then
+		if [ -z "${GZ_RESOURCE_PATHS}" ]; then
+			GZ_RESOURCE_PATHS="${candidate}"
+		else
+			GZ_RESOURCE_PATHS="${GZ_RESOURCE_PATHS}:${candidate}"
+		fi
+	fi
+}
+
+if [ -n "${GZ_SIM_RESOURCE_PATH}" ]; then
+	IFS=':' read -r -a EXISTING_GZ_PATHS <<<"${GZ_SIM_RESOURCE_PATH}"
+	for p in "${EXISTING_GZ_PATHS[@]}"; do
+		append_resource_path "${p}"
+	done
+fi
+append_resource_path "${PX4_GZ_MODELS}"
+append_resource_path "${PX4_GZ_WORLDS}"
+append_resource_path "${CUSTOM_WORLD_DIR_DEFAULT}"
+export GZ_SIM_RESOURCE_PATH="${GZ_RESOURCE_PATHS}"
+
+if [ -n "${CUSTOM_WORLD_FILE}" ]; then
+	if [ ! -f "${CUSTOM_WORLD_FILE}" ]; then
+		echo "[ERROR] Provided world file does not exist: ${CUSTOM_WORLD_FILE}" >&2
+		exit 1
+	fi
+	CUSTOM_WORLD_DIR="$(dirname "${CUSTOM_WORLD_FILE}")"
+	CUSTOM_WORLD_NAME="$(basename "${CUSTOM_WORLD_FILE}")"
+	CUSTOM_WORLD_NAME="${CUSTOM_WORLD_NAME%.sdf}"
+	# Put custom world directory first to avoid filename collisions
+	# with PX4 built-in worlds (e.g. another world.sdf).
+	GZ_RESOURCE_PATHS=""
+	append_resource_path "${CUSTOM_WORLD_DIR}"
+	append_resource_path "${PX4_GZ_MODELS}"
+	append_resource_path "${PX4_GZ_WORLDS}"
+	append_resource_path "${CUSTOM_WORLD_DIR_DEFAULT}"
+	export GZ_SIM_RESOURCE_PATH="${GZ_RESOURCE_PATHS}"
+	export PX4_GZ_WORLD="${CUSTOM_WORLD_NAME}"
+	echo "Using custom world: ${CUSTOM_WORLD_FILE} (PX4_GZ_WORLD=${PX4_GZ_WORLD})"
+fi
+
+# Ensure Gazebo can load PX4 simulation systems/services used for model spawning.
+if [ -d "${PX4_GZ_PLUGINS}" ]; then
+	if [ -n "${GZ_SIM_SYSTEM_PLUGIN_PATH}" ]; then
+		export GZ_SIM_SYSTEM_PLUGIN_PATH="${GZ_SIM_SYSTEM_PLUGIN_PATH}:${PX4_GZ_PLUGINS}"
+	else
+		export GZ_SIM_SYSTEM_PLUGIN_PATH="${PX4_GZ_PLUGINS}"
+	fi
+fi
+
+if [ -f "${PX4_GZ_SERVER_CONFIG}" ]; then
+	export GZ_SIM_SERVER_CONFIG_PATH="${PX4_GZ_SERVER_CONFIG}"
 fi
 
 if [ ! -x "${PX4_BIN}" ]; then
