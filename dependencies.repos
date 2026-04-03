@@ -3,12 +3,12 @@ repositories:
   px4_msgs:
     type: git
     url: https://github.com/PX4/px4_msgs.git
-    version: release/1.14
+    version: main
   
   px4_ros_com:
     type: git
     url: https://github.com/PX4/px4_ros_com.git
-    version: release/v1.14
+    version: main
 
   # Add more external dependencies here as needed
   # Example:

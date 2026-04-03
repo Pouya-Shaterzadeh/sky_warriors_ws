@@ -40,15 +40,15 @@ echo "Starting new tmux session '${session}'..."
 
 # Window 1: PX4 SITL instance 1 (x500_mono_cam)
 tmux new-session -d -s "${session}" -n "PX4-1" \
-	"cd \"${PX4_DIR}\" && PX4_SYS_AUTOSTART=4010 PX4_SIM_MODEL=gz_x500_mono_cam \"${PX4_BIN}\" -i 1"
+	"cd \"${PX4_DIR}\" && UXRCE_DDS_PRT=8888 PX4_SYS_AUTOSTART=4010 PX4_SIM_MODEL=gz_x500_mono_cam \"${PX4_BIN}\" -i 1"
 
 # Window 2: PX4 SITL instance 2 (x500)
 tmux new-window -t "${session}:" -n "PX4-2" \
-	"cd \"${PX4_DIR}\" && PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4001 PX4_GZ_MODEL_POSE=\"0,1\" PX4_SIM_MODEL=gz_x500 \"${PX4_BIN}\" -i 2"
+	"cd \"${PX4_DIR}\" && UXRCE_DDS_PRT=8888 PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4001 PX4_GZ_MODEL_POSE=\"0,1\" PX4_SIM_MODEL=gz_x500 \"${PX4_BIN}\" -i 2"
 
 # Window 3: PX4 SITL instance 3 (x500)
 tmux new-window -t "${session}:" -n "PX4-3" \
-	"cd \"${PX4_DIR}\" && PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4001 PX4_GZ_MODEL_POSE=\"0,2\" PX4_SIM_MODEL=gz_x500 \"${PX4_BIN}\" -i 3"
+	"cd \"${PX4_DIR}\" && UXRCE_DDS_PRT=8888 PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4001 PX4_GZ_MODEL_POSE=\"0,2\" PX4_SIM_MODEL=gz_x500 \"${PX4_BIN}\" -i 3"
 
 # Window 4: Micro XRCE Agent
 tmux new-window -t "${session}:" -n "MicroXRCE" \
