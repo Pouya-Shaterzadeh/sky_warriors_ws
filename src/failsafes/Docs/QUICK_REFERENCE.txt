@@ -1,153 +1,35 @@
-╔═══════════════════════════════════════════════════════════════╗
-║           FAILSAFE TESTING QUICK REFERENCE CARD               ║
-╚═══════════════════════════════════════════════════════════════╝
+FAILSAFE QUICK REFERENCE
+========================
 
-┌─────────────────────────────────────────────────────────────┐
-│ PROBLEM: TIMEOUT Error                                      │
-└─────────────────────────────────────────────────────────────┘
+Use only:
+- failsafe_manager.py
+- mavsdkrunner.py
+- mavsdkrunner_automated.py
 
-ROOT CAUSE: SYS_FAILURE_EN parameter is NOT enabled in PX4
+Run:
+----
+cd ~/sky_warriors_ws/src/failsafes/scripts
+# manual/global PX4 shell commands
+python3 mavsdkrunner.py
 
-┌─────────────────────────────────────────────────────────────┐
-│ QUICKEST FIX (Works Immediately)                            │
-└─────────────────────────────────────────────────────────────┘
+# automated MAVSDK scenario runner
+python3 mavsdkrunner_automated.py
 
-cd ~/sky_warrior_ws/src/failsafes/scripts
-./test_gps_failsafe_px4cmd.sh
+Common issue:
+-------------
+If failure injection times out, enable:
+param set SYS_FAILURE_EN 1
+param save
 
-→ This uses PX4's internal command, bypasses MAVLink entirely
-→ No parameter changes needed
-→ Most reliable method
+Then restart SITL.
 
-┌─────────────────────────────────────────────────────────────┐
-│ PERMANENT FIX (For MAVSDK method)                           │
-└─────────────────────────────────────────────────────────────┘
+RTL landing zones:
+------------------
+Drone0 -> (0,0)
+Drone1 -> (4,3)
+Drone2 -> (8,0)
 
-Step 1: Edit params BEFORE starting PX4
-────────────────────────────────────────
-nano ~/PX4-Autopilot/build/px4_sitl_default/rootfs/0/etc/params
-
-Add this line:
-SYS_FAILURE_EN 1
-
-Save and exit (Ctrl+X, Y, Enter)
-
-Step 2: Start PX4
-─────────────────
-cd ~/sky_warrior_ws/src/skyw_simulation/new-method
-./2_spawn_px4_sitl.sh 1
-
-Step 3: Run updated MAVSDK test
-────────────────────────────────
-cd ~/sky_warrior_ws/src/failsafes/scripts
-python3 test_failsafe_mavsdk.py
-
-┌─────────────────────────────────────────────────────────────┐
-│ RUNTIME FIX (While PX4 is running)                          │
-└─────────────────────────────────────────────────────────────┘
-
-# Connect to PX4 shell
-cd ~/PX4-Autopilot
-./build/px4_sitl_default/bin/px4 shell -i 0
-
-# In PX4 console:
-pxh> param set SYS_FAILURE_EN 1
-pxh> param save
-
-⚠️  May not persist across restarts
-
-┌─────────────────────────────────────────────────────────────┐
-│ VERIFY PARAMETER IS SET                                     │
-└─────────────────────────────────────────────────────────────┘
-
-cd ~/PX4-Autopilot
-./build/px4_sitl_default/bin/px4 shell -i 0
-pxh> param show SYS_FAILURE_EN
-
-Expected: SYS_FAILURE_EN: curr: 1 default: 0
-
-┌─────────────────────────────────────────────────────────────┐
-│ ALL TESTING METHODS                                         │
-└─────────────────────────────────────────────────────────────┘
-
-Method 1: PX4 Shell (No params needed) ⭐ RECOMMENDED
-──────────────────────────────────────────────────────
-./test_gps_failsafe_px4cmd.sh
-
-Method 2: MAVSDK Python (Needs SYS_FAILURE_EN=1)
-─────────────────────────────────────────────────
-python3 test_failsafe_mavsdk.py
-
-Method 3: Manual PX4 command
-────────────────────────────
-echo "failure gps off" | ./build/px4_sitl_default/bin/px4 shell -i 0
-
-Method 4: ROS 2 (Needs SYS_FAILURE_EN=1)
-────────────────────────────────────────
-python3 failsafe_monitor_ros2.py
-
-┌─────────────────────────────────────────────────────────────┐
-│ WHAT EACH FILE DOES                                         │
-└─────────────────────────────────────────────────────────────┘
-
-test_failsafe_mavsdk.py       → Automated Python tests via MAVSDK
-test_gps_failsafe_px4cmd.sh   → Interactive test via PX4 shell ⭐
-failsafe_monitor_ros2.py      → Monitor failsafe activations
-test_gps_loss.sh              → Manual testing guide
-test_battery_failsafe.sh      → Battery failure guide
-test_rc_loss.sh               → RC loss guide
-test_datalink_loss.sh         → Datalink loss guide
-
-┌─────────────────────────────────────────────────────────────┐
-│ COMMON COMMANDS                                             │
-└─────────────────────────────────────────────────────────────┘
-
-Inject GPS failure:
-  failure gps off
-
-Restore GPS:
-  failure gps ok
-
-Check parameter:
-  param show SYS_FAILURE_EN
-
-Set parameter:
-  param set SYS_FAILURE_EN 1
-  param save
-
-View all failure options:
-  failure help
-
-┌─────────────────────────────────────────────────────────────┐
-│ EXPECTED BEHAVIOR (GPS Failure)                             │
-└─────────────────────────────────────────────────────────────┘
-
-1. GPS status → "NOT FOUND" or "LOST"
-2. Flight mode → Switches to RTL
-3. Drone → Returns to launch position
-4. Drone → Lands automatically
-
-Watch in QGroundControl or monitor script output
-
-┌─────────────────────────────────────────────────────────────┐
-│ TROUBLESHOOTING CHECKLIST                                   │
-└─────────────────────────────────────────────────────────────┘
-
-□ PX4 SITL is running (check: pgrep -f px4)
-□ Gazebo is running (check: pgrep -f "gz sim")
-□ Drone is spawned in sim
-□ SYS_FAILURE_EN = 1 (if using MAVSDK/MAVLink)
-□ Drone had valid GPS before injecting failure
-□ Monitoring QGC or ROS topics
-
-┌─────────────────────────────────────────────────────────────┐
-│ MORE INFO                                                   │
-└─────────────────────────────────────────────────────────────┘
-
-Read: TIMEOUT_FIX.md           → Detailed troubleshooting
-Read: DEVELOPMENT_GUIDE.md     → Complete approach comparison
-Read: README.md                → Overview and references
-
-═══════════════════════════════════════════════════════════════
-        For detailed explanations: cat TIMEOUT_FIX.md
-═══════════════════════════════════════════════════════════════
+Expected behavior:
+------------------
+1) Drone enters RTL or LAND (depends on failure type)
+2) Drone returns to its own LZ

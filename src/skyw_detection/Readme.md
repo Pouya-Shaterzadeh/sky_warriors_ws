@@ -27,7 +27,7 @@ ros2 run skyw_detection qrcode_detector
 
 ```bash
 cd ~/PX4-Autopilot
-PX4_GZ_WORLD=warehouse1 make px4_sitl gz_x500_mono_cam
+PX4_GZ_WORLD=skyw_multi_lz_world make px4_sitl gz_x500_mono_cam
 ```
 
 ### Method 2: Standalone PX4 Launch
@@ -38,7 +38,7 @@ PX4_GZ_STANDALONE=1 \
   PX4_SYS_AUTOSTART=4009 \
   PX4_SIM_MODEL=gz_x500_mono_cam \
   PX4_GZ_MODEL=x500_mono_cam \
-  PX4_GZ_WORLD=warehouse1 \
+  PX4_GZ_WORLD=skyw_multi_lz_world \
   ./build/px4_sitl_default/bin/px4
 ```
 

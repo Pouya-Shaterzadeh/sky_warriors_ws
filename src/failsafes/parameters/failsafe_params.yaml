@@ -1,5 +1,15 @@
 # PX4 Failsafe Parameters Configuration
-# Apply these parameters for comprehensive failsafe testing
+# Adapted for Gazebo Classic 11 and MAVSDK Automated Testing
+
+# CRITICAL PARAMETER for Automated MAVSDK API Injection:
+# The SYS_FAILURE_EN parameter must be set to 1 for MAVSDK's failure.inject() to work.
+# The FailsafeManager script attempts to set this automatically.
+failure_detection:
+  SYS_FAILURE_EN: 1            # Enable failure injection (SITL only)
+  FD_FAIL_P: 60                # Failure detector pitch threshold (deg)
+  FD_FAIL_R: 60                # Failure detector roll threshold (deg)
+  FD_FAIL_P_TTRI: 0.3          # Pitch failure trigger time (s)
+  FD_FAIL_R_TTRI: 0.3          # Roll failure trigger time (s)
 
 # General Safety Settings
 safety:
@@ -51,28 +61,3 @@ rtl_settings:
 # Emergency/Parachute
 emergency:
   COM_PARACHUTE: 0             # Parachute deployment: 0=Disabled, 1=Enabled
-
-# System Failure Detection
-failure_detection:
-  SYS_FAILURE_EN: 1            # Enable failure injection (SITL only)
-  FD_FAIL_P: 60                # Failure detector pitch threshold (deg)
-  FD_FAIL_R: 60                # Failure detector roll threshold (deg)
-  FD_FAIL_P_TTRI: 0.3          # Pitch failure trigger time (s)
-  FD_FAIL_R_TTRI: 0.3          # Roll failure trigger time (s)
-
-# How to Apply:
-# =============
-# Method 1: QGroundControl
-#   Parameters -> search for parameter name -> modify value
-#
-# Method 2: PX4 Console  
-#   Open PX4 shell: 
-#   cd ~/PX4-Autopilot
-#   ./build/px4_sitl_default/bin/px4 -i 0
-#   
-#   Then run:
-#   param set PARAM_NAME VALUE
-#   param save
-#
-# Method 3: Via MAVLink (Python script)
-#   See: scripts/apply_failsafe_params.py
