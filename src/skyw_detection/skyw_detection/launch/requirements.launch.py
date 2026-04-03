@@ -7,14 +7,15 @@ from launch_ros.actions import Node
 def generate_launch_description():
     world_name_arg = DeclareLaunchArgument(
         "world_name",
-        default_value="hexagon_world",
-        description="Gazebo world name used in /world/<world_name>/... topics.",
+        default_value="skyw_hexagon",
+        description="Must match <world name=...> in world.sdf (Gazebo /world/<name>/... topics).",
     )
     model_name_arg = DeclareLaunchArgument(
         "model_name",
         default_value="x500_mono_cam_0",
         description="Gazebo model name for the camera UAV.",
     )
+
     image_out_topic_arg = DeclareLaunchArgument(
         "image_out_topic",
         default_value="/camera/image_raw",

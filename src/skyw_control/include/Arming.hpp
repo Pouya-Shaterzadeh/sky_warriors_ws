@@ -8,6 +8,7 @@
 
 #include <px4_msgs/msg/vehicle_command.hpp>
 #include <px4_msgs/msg/vehicle_command_ack.hpp>
+#include <px4_msgs/msg/vehicle_status.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 #include <chrono>
@@ -23,6 +24,7 @@ using namespace std::chrono_literals;
 class Arming : public rclcpp::Node {
     using VehicleCommand = px4_msgs::msg::VehicleCommand;
     using VehicleCommandAck = px4_msgs::msg::VehicleCommandAck;
+    using VehicleStatus = px4_msgs::msg::VehicleStatus;
 
 public:
     /**
@@ -59,11 +61,20 @@ private:
      */
     void command_ack_callback(const VehicleCommandAck::SharedPtr msg, std::size_t drone_idx);
 
+    /**
+     * @brief Callback for PX4 vehicle status updates.
+     * @param msg Vehicle status message.
+     * @param drone_idx Index of the drone.
+     */
+    void vehicle_status_callback(const VehicleStatus::SharedPtr msg, std::size_t drone_idx);
+
 private:
     std::vector<rclcpp::Publisher<VehicleCommand>::SharedPtr> vehicle_command_pubs_;
     std::vector<rclcpp::Subscription<VehicleCommandAck>::SharedPtr> command_ack_subs_;
+    std::vector<rclcpp::Subscription<VehicleStatus>::SharedPtr> vehicle_status_subs_;
     std::vector<bool> is_armed_;
     std::vector<bool> is_offboard_;
+    std::vector<uint8_t> target_system_ids_;
     rclcpp::TimerBase::SharedPtr timer_;
     std::size_t nb_drones_;
     uint32_t command_id_;

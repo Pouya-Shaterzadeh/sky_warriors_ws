@@ -18,8 +18,8 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Header
 from visualization_msgs.msg import Marker, MarkerArray
 
-from .python.color_detector import ColorDetector
-from .python.utils import (
+from .color_detector import ColorDetector
+from .utils import (
     estimate_depth_from_diameter_px,
     pixel_to_camera_xyz,
     rotation_matrix_from_rpy,

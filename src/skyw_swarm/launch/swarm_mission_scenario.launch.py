@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, TimerAction
+from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -11,11 +11,11 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     drone_count = LaunchConfiguration('drone_count')
 
-    takeoff_altitude = LaunchConfiguration('takeoff_altitude')
-    mission_altitude = LaunchConfiguration('mission_altitude')
-    mission_spacing = LaunchConfiguration('mission_spacing')
-    mission_delay_s = LaunchConfiguration('mission_delay_s')
-    initial_goal_delay_s = LaunchConfiguration('initial_goal_delay_s')
+    takeoff_z = LaunchConfiguration('takeoff_z')
+    wall_x = LaunchConfiguration('wall_x')
+    wall_y = LaunchConfiguration('wall_y')
+    wall_z = LaunchConfiguration('wall_z')
+    wall_yaw = LaunchConfiguration('wall_yaw')
 
     pose_bridge = Node(
         package='skyw_swarm',
@@ -26,14 +26,21 @@ def generate_launch_description():
         parameters=[{'drone_count': drone_count, 'use_sim_time': use_sim_time}],
     )
 
-    # Keeps publishing formation setpoints to /droneX/setpoint_position.
-    formation_server = Node(
+    mission_sequencer = Node(
         package='skyw_swarm',
-        executable='formation_server.py',
-        name='formation_server',
+        executable='mission_sequencer.py',
+        name='mission_sequencer',
         output='screen',
         arguments=['--ros-args', '--log-level', log_level],
-        parameters=[{'drone_count': drone_count, 'use_sim_time': use_sim_time}],
+        parameters=[{
+            'drone_count': drone_count,
+            'use_sim_time': use_sim_time,
+            'takeoff_z': takeoff_z,
+            'wall_x': wall_x,
+            'wall_y': wall_y,
+            'wall_z': wall_z,
+            'wall_yaw': wall_yaw,
+        }],
     )
 
     # Converts /droneX/setpoint_position into PX4 offboard topics and sends arm/offboard commands.
@@ -53,49 +60,6 @@ def generate_launch_description():
         }],
     )
 
-    # Step 1: command all drones to climb to takeoff_altitude (line spacing = 0.0).
-    takeoff_goal = ExecuteProcess(
-        cmd=[
-            'ros2',
-            'action',
-            'send_goal',
-            '/set_formation',
-            'skyw_swarm/action/SetFormation',
-            [
-                '{formation_type: "line", spacing: 0.0, altitude: ',
-                takeoff_altitude,
-                ', rotation: 0.0, drone_count: ',
-                drone_count,
-                '}',
-            ],
-        ],
-        output='screen',
-    )
-
-    # Step 2 (delayed): transition to line formation with mission spacing.
-    line_goal = ExecuteProcess(
-        cmd=[
-            'ros2',
-            'action',
-            'send_goal',
-            '/set_formation',
-            'skyw_swarm/action/SetFormation',
-            [
-                '{formation_type: "line", spacing: ',
-                mission_spacing,
-                ', altitude: ',
-                mission_altitude,
-                ', rotation: 0.0, drone_count: ',
-                drone_count,
-                '}',
-            ],
-        ],
-        output='screen',
-    )
-
-    delayed_takeoff = TimerAction(period=initial_goal_delay_s, actions=[takeoff_goal])
-    delayed_line = TimerAction(period=mission_delay_s, actions=[line_goal])
-
     return LaunchDescription([
         DeclareLaunchArgument(
             'log_level',
@@ -113,33 +77,31 @@ def generate_launch_description():
             description='Number of PX4 vehicles in the mission',
         ),
         DeclareLaunchArgument(
-            'takeoff_altitude',
+            'takeoff_z',
+            default_value='-2.5',
+            description='Takeoff Z setpoint in PX4 local frame (NED: up is negative)',
+        ),
+        DeclareLaunchArgument(
+            'wall_x',
             default_value='5.0',
-            description='Initial climb altitude in meters',
+            description='Wall target X in PX4 local frame',
         ),
         DeclareLaunchArgument(
-            'mission_altitude',
-            default_value='5.0',
-            description='Formation flight altitude in meters',
+            'wall_y',
+            default_value='0.0',
+            description='Wall target Y in PX4 local frame',
         ),
         DeclareLaunchArgument(
-            'mission_spacing',
-            default_value='2.0',
-            description='Line formation spacing in meters',
+            'wall_z',
+            default_value='-1.0',
+            description='Wall target Z in PX4 local frame (NED: up is negative)',
         ),
         DeclareLaunchArgument(
-            'initial_goal_delay_s',
-            default_value='3.0',
-            description='Delay before first goal (startup settling time)',
-        ),
-        DeclareLaunchArgument(
-            'mission_delay_s',
-            default_value='8.0',
-            description='Delay before line-formation goal (seconds from launch)',
+            'wall_yaw',
+            default_value='1.57',
+            description='Wall target yaw in radians',
         ),
         pose_bridge,
-        formation_server,
+        mission_sequencer,
         offboard_bridge,
-        delayed_takeoff,
-        delayed_line,
     ])

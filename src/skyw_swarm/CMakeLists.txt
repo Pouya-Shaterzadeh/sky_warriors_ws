@@ -29,6 +29,7 @@ install(PROGRAMS
   skyw_swarm/formation_math.py
   skyw_swarm/swarm_controller.py
   skyw_swarm/px4_offboard_bridge.py
+  skyw_swarm/mission_sequencer.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

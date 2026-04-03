@@ -2,20 +2,21 @@
 
 ## Overview
 
-The QR detector in this package is currently script-based and decodes QR data from the UAV camera stream.
-It subscribes to a camera topic, decodes with `pyzbar`, and publishes decoded text to a ROS 2 topic.
+The QR node decodes QR codes from a `sensor_msgs/Image` stream using **pyzbar** on a **grayscale + fixed binary threshold** image (same idea as the tutorial [decode_qr.py](https://github.com/Pouya-Shaterzadeh/pkg_cv_ros_tutorial_by_dhanuzch/blob/main/scripts/decode_qr.py)).
 
-- **Input image topic:** `/depth_cam/rgb/image_raw`
-- **Output topic:** `/qr_decoded` (`std_msgs/String`)
-- **Implementation file:** `skyw_detection/scripts/qrcode_detecter.py`
+- **Node implementation:** `skyw_detection/python/qr_code_detector_node.py`
+- **Standard run:** `ros2 run skyw_detection qrcode_detector`
+- **Launch:** `ros2 launch skyw_detection qr_detection.launch.py`
+- **Default camera topic:** `/camera/image_raw`
+- **Default output:** `/qr_decoded` (`std_msgs/String`)
 
 ## Prerequisites
 
-Before running QR detection:
+1. PX4 SITL + Gazebo (or hardware) with a camera publishing ROS images.
+2. Micro-XRCE-DDS Agent when using PX4.
+3. A **ros_gz_bridge** `parameter_bridge` (or equivalent) so Gazebo camera images reach ROS 2 — same role as the bridge in [1_world_and_script.launch.py](https://github.com/Pouya-Shaterzadeh/pkg_cv_ros_tutorial_by_dhanuzch/blob/main/launch/1_world_and_script.launch.py).
 
-1. PX4 SITL + Gazebo world is running.
-2. Micro-XRCE-DDS Agent is running (for PX4 <-> ROS 2 bridge).
-3. Camera image bridge is publishing ROS images.
+This package provides `requirements.launch.py` to bridge the Gazebo camera topic to `/camera/image_raw` (tune `world_name` / `model_name` to match your sim).
 
 Quick topic check:
 
@@ -23,61 +24,58 @@ Quick topic check:
 ros2 topic list | rg "image_raw|qr_decoded"
 ```
 
-## Run QR Detector
+## Run (recommended)
 
-From the workspace:
+After building and sourcing the workspace:
 
 ```bash
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/<distro>/setup.bash
 source ~/sky_warrior_ws/install/setup.bash
-python3 ~/sky_warrior_ws/src/skyw_detection/skyw_detection/scripts/qrcode_detecter.py
+ros2 run skyw_detection qrcode_detector
 ```
 
-## Verify Output
+With camera remapping via parameters:
 
-Read decoded payloads:
+```bash
+ros2 run skyw_detection qrcode_detector --ros-args -p camera_topic:=/camera/image_raw
+```
+
+## Launch file
+
+```bash
+ros2 launch skyw_detection qr_detection.launch.py camera_topic:=/camera/image_raw
+```
+
+Arguments: `camera_topic`, `decoded_topic`, `enable_visualization`, `binary_threshold`.
+
+## Verify output
 
 ```bash
 ros2 topic echo /qr_decoded
 ```
 
-## How It Works
+## Parameters
 
-- Receives `sensor_msgs/Image` frames from the camera topic.
-- Converts ROS image to OpenCV BGR image via `cv_bridge`.
-- Runs `pyzbar.decode(...)` on each frame.
-- Draws detection polygons and decoded text on a local OpenCV window.
-- Publishes only newly changed decoded strings to avoid repeated spam.
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `camera_topic` | `/camera/image_raw` | Input image |
+| `decoded_topic` | `/qr_decoded` | Decoded string publisher |
+| `enable_visualization` | `true` | OpenCV window |
+| `binary_threshold` | `45` | `cv2.threshold` value for pyzbar input |
+| `publish_only_on_change` | `true` | Avoid republishing identical payloads |
 
-## QR Creation Helper
+## QR image helper
 
-You can generate QR images for simulation using:
+Generate textures for simulation:
 
 - `skyw_detection/scripts/qrcode_creater.py`
 
-It reads mission config files and creates:
-- `qr-simple.jpg` (YAML-formatted data)
-- `qr-competition.jpg` (JSON-formatted data)
+## Dependencies
 
-Example:
-
-```bash
-python3 ~/sky_warrior_ws/src/skyw_detection/skyw_detection/scripts/qrcode_creater.py
-```
-
-## Notes and Current Limitations
-
-- The detector is not yet exposed as a `ros2 run skyw_detection ...` console entry point.
-- Camera topic is hardcoded in the current script (`/depth_cam/rgb/image_raw`).
-- Visualization uses `cv2.imshow`, so it requires a GUI session.
+- `python3-pyzbar` (declared in `package.xml`; install via apt/rosdep or `pip install pyzbar` if needed).
 
 ## Troubleshooting
 
-- **No messages on `/qr_decoded`:**
-  - Confirm image topic is active:
-    `ros2 topic hz /depth_cam/rgb/image_raw`
-  - Ensure QR image is visible and large enough in camera FOV.
-- **Import errors (`pyzbar`, `cv_bridge`, `cv2`):**
-  - Install missing dependencies in your environment and source ROS setup again.
-- **Window does not appear:**
-  - Check if you are running with desktop/GUI access (X11/Wayland forwarding).
+- **No `/qr_decoded`:** `ros2 topic hz <your_camera_topic>` — fix the bridge or `camera_topic` first.
+- **No GUI window:** set `enable_visualization:=false` headless, or use X11 forwarding.
+- **Poor decode rate:** adjust `binary_threshold` or lighting; ensure QR fills enough of the image.

@@ -5,6 +5,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from geometry_msgs.msg import PoseStamped
 from px4_msgs.msg import OffboardControlMode, TrajectorySetpoint, VehicleCommand
+import math
 
 
 class PX4OffboardBridge(Node):
@@ -116,7 +117,7 @@ class PX4OffboardBridge(Node):
                 float(self.last_setpoint[i].pose.position.y),
                 float(self.last_setpoint[i].pose.position.z),
             ]
-            setpoint_msg.yaw = 0.0
+            setpoint_msg.yaw = self._yaw_from_quaternion(self.last_setpoint[i])
             self.setpoint_pubs[i].publish(setpoint_msg)
 
             self.offboard_ticks[i] = self.offboard_ticks.get(i, 0) + 1
@@ -128,6 +129,14 @@ class PX4OffboardBridge(Node):
             if self.auto_arm and i not in self.sent_arm and self.offboard_ticks[i] >= 10:
                 self._send_vehicle_command(i, 400, 1.0, 0.0)
                 self.sent_arm.add(i)
+
+    @staticmethod
+    def _yaw_from_quaternion(msg):
+        q = msg.pose.orientation
+        # Quaternion to yaw (Z axis) conversion.
+        siny_cosp = 2.0 * ((q.w * q.z) + (q.x * q.y))
+        cosy_cosp = 1.0 - 2.0 * ((q.y * q.y) + (q.z * q.z))
+        return float(math.atan2(siny_cosp, cosy_cosp))
 
     def _send_vehicle_command(self, idx, command, param1, param2):
         msg = VehicleCommand()

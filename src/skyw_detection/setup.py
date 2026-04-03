@@ -17,7 +17,7 @@ setup(
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
-        (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
+        (os.path.join('share', package_name, 'launch'), glob(os.path.join(package_name, 'launch', '*.py'))),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -27,7 +27,8 @@ setup(
     license='MIT',
     entry_points={
         'console_scripts': [
-            'color_detector_node = skyw_detection.color_detector_node:main',
+            'color_detector_node = skyw_detection.python.color_detector_node:main',
+            'qrcode_detector = skyw_detection.python.qr_code_detector_node:main',
         ],
     },
 )

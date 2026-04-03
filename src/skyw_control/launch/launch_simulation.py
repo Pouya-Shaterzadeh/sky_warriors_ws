@@ -37,6 +37,18 @@ def generate_launch_description():
     ld = LaunchDescription()
     package_dir = get_package_share_directory('skyw_control')
 
+    # Bridge Gazebo simulation clock into ROS 2 /clock so nodes using
+    # use_sim_time can run timers and state machines.
+    ld.add_action(
+        Node(
+            package='ros_gz_bridge',
+            executable='parameter_bridge',
+            name='clock_bridge',
+            arguments=['/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock'],
+            output='screen'
+        )
+    )
+
     # Extract information from configuration files
 
     # Swarm information

@@ -8,8 +8,10 @@ Arming::Arming() : Node("arming"), command_id_(0) {
     // Initialize vectors
     vehicle_command_pubs_.reserve(nb_drones_);
     command_ack_subs_.reserve(nb_drones_);
+    vehicle_status_subs_.reserve(nb_drones_);
     is_armed_.assign(nb_drones_, false);
     is_offboard_.assign(nb_drones_, false);
+    target_system_ids_.assign(nb_drones_, 0);
 
     // QoS profile for PX4 communication
     auto qos = rclcpp::QoS(rclcpp::KeepLast(10)).best_effort().durability_volatile();
@@ -31,6 +33,17 @@ Arming::Arming() : Node("arming"), command_id_(0) {
                 ack_topic, qos,
                 [this, i](const VehicleCommandAck::SharedPtr msg) {
                     command_ack_callback(msg, i);
+                }
+            )
+        );
+
+        // Subscribe to vehicle status to discover PX4 MAV_SYS_ID per instance.
+        std::string status_topic = namespace_prefix + "/fmu/out/vehicle_status_v1";
+        vehicle_status_subs_.push_back(
+            this->create_subscription<VehicleStatus>(
+                status_topic, qos,
+                [this, i](const VehicleStatus::SharedPtr msg) {
+                    vehicle_status_callback(msg, i);
                 }
             )
         );
@@ -97,7 +110,14 @@ void Arming::publish_vehicle_command(uint16_t command, std::size_t drone_idx,
     msg.command = command;
     msg.param1 = param1;
     msg.param2 = param2;
-    msg.target_system = static_cast<uint8_t>(drone_idx + 1);
+    const auto detected_target = target_system_ids_[drone_idx];
+    if (detected_target == 0) {
+        RCLCPP_WARN_THROTTLE(
+            this->get_logger(), *this->get_clock(), 5000,
+            "PX4 system ID not detected yet for drone n°%zu. Using fallback target_system=%zu",
+            drone_idx + 1, drone_idx + 1);
+    }
+    msg.target_system = detected_target != 0 ? detected_target : static_cast<uint8_t>(drone_idx + 1);
     msg.target_component = 1;
     msg.source_system = 1;
     msg.source_component = 1;
@@ -125,6 +145,24 @@ void Arming::command_ack_callback(const VehicleCommandAck::SharedPtr msg, std::s
     } else if (msg->result != VehicleCommandAck::VEHICLE_CMD_RESULT_IN_PROGRESS) {
         RCLCPP_WARN(this->get_logger(), "Command %u for drone n°%zu failed with result: %u",
                     msg->command, drone_idx + 1, msg->result);
+    }
+}
+
+/**
+ * @brief Callback for vehicle status updates used to detect PX4 MAV_SYS_ID.
+ * @param msg Vehicle status message.
+ * @param drone_idx Index of the drone.
+ */
+void Arming::vehicle_status_callback(const VehicleStatus::SharedPtr msg, std::size_t drone_idx) {
+    const uint8_t detected_system_id = msg->system_id;
+    if (detected_system_id == 0) {
+        return;
+    }
+
+    if (target_system_ids_[drone_idx] != detected_system_id) {
+        target_system_ids_[drone_idx] = detected_system_id;
+        RCLCPP_INFO(this->get_logger(), "Detected system ID for drone n°%zu: %u",
+                    drone_idx + 1, static_cast<unsigned int>(detected_system_id));
     }
 }
 
