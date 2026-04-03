@@ -7,11 +7,6 @@ WS_DIR="${HOME}/sky_warrior_ws"
 ROS_SETUP="/opt/ros/humble/setup.bash"
 WS_SETUP="${WS_DIR}/install/setup.bash"
 DRONE_COUNT="${DRONE_COUNT:-3}"
-SWARM_NAMESPACE="${SWARM_NAMESPACE:-}"
-USE_FASTDDS_XML="${USE_FASTDDS_XML:-false}"
-LAUNCH_FILE="${LAUNCH_FILE:-swarm_launch.py}"
-START_CLIENT="${START_CLIENT:-true}"
-START_CONTROLLER="${START_CONTROLLER:-true}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FASTDDS_XML="${SCRIPT_DIR}/config/fastdds.xml"
 
@@ -37,16 +32,14 @@ fi
 
 echo "Starting new tmux session '${session}'..."
 
-tmux new-session -d -s "${session}" -n "Swarm" \
-	"export RMW_IMPLEMENTATION=\"${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}\" && source \"${ROS_SETUP}\" && if [ -f \"${WS_SETUP}\" ]; then source \"${WS_SETUP}\"; fi && \
-	ros2 launch skyw_swarm \"${LAUNCH_FILE}\" \
-		drone_count:=${DRONE_COUNT} \
-		start_client:=${START_CLIENT} \
-		start_controller:=${START_CONTROLLER} \
-		use_fastdds_xml:=${USE_FASTDDS_XML} \
-		fastdds_xml:=\"${FASTDDS_XML}\" \
-		namespace:=\"${SWARM_NAMESPACE}\"; \
-	echo "[swarm.sh] Launch exited. Press Ctrl+D to close."; exec bash"
+tmux new-session -d -s "${session}" -n "Bridge" \
+	"export RMW_IMPLEMENTATION=rmw_fastrtps_cpp RMW_FASTRTPS_USE_QOS_FROM_XML=1 FASTDDS_DEFAULT_PROFILES_FILE=\"${FASTDDS_XML}\" && source \"${ROS_SETUP}\" && if [ -f \"${WS_SETUP}\" ]; then source \"${WS_SETUP}\"; fi && ros2 run skyw_swarm px4_pose_bridge.py --ros-args -p drone_count:=${DRONE_COUNT}"
+
+tmux new-window -t "${session}:" -n "Server" \
+	"export RMW_IMPLEMENTATION=rmw_fastrtps_cpp RMW_FASTRTPS_USE_QOS_FROM_XML=1 FASTDDS_DEFAULT_PROFILES_FILE=\"${FASTDDS_XML}\" && source \"${ROS_SETUP}\" && if [ -f \"${WS_SETUP}\" ]; then source \"${WS_SETUP}\"; fi && ros2 run skyw_swarm formation_server.py --ros-args -p drone_count:=${DRONE_COUNT}"
+
+tmux new-window -t "${session}:" -n "Client" \
+	"export RMW_IMPLEMENTATION=rmw_fastrtps_cpp RMW_FASTRTPS_USE_QOS_FROM_XML=1 FASTDDS_DEFAULT_PROFILES_FILE=\"${FASTDDS_XML}\" && source \"${ROS_SETUP}\" && if [ -f \"${WS_SETUP}\" ]; then source \"${WS_SETUP}\"; fi && sleep 2 && ros2 run skyw_swarm formation_client.py"
 
 echo "tmux session '${session}' is ready."
 exec tmux attach -t "${session}"

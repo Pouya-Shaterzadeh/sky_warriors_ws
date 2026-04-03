@@ -12,8 +12,6 @@ ros2 launch skyw_control <launch_file>
 ```
 ## Configuration
 
-### Configuration Files
-
 The following configuration files control the swarm behavior:
 
 - **`config/swarm_config.json`** - Swarm setup and drone parameters
@@ -29,20 +27,32 @@ Edit these configuration files on your host machine and rebuild the package:
 colcon build --packages-select skyw_control
 source install/setup.bash
 ```
+### Mission implemented now
 
-## Gazebo Garden vs Classic
+1. Take off all 3 drones to a safe hold altitude (`takeoff_z`, NED frame).
+2. Keep drones 2 and 3 hovering near reference.
+3. Send drone 1 (`x500_mono`) to `wall_1` target:
+   - wall pose reference: `(x=5, y=0, z=-1, yaw=1.57)` in PX4 local frame
+4. Hold and scan QR until decode or timeout.
 
-This setup uses **Gazebo Garden** (new generation):
+### Run
 
-| Feature | Gazebo Classic | Gazebo Garden |
-|---------|---------------|---------------|
-| Command | `gazebo` | `gz sim` |
-| Performance | Good | Better |
-| Physics | ODE | Multiple engines |
-| Sensors | Limited | Enhanced |
+```bash
+colcon build --packages-select skyw_swarm
+source install/setup.bash
+ros2 launch skyw_swarm swarm_mission_scenario.launch.py use_sim_time:=true
+```
 
-**PX4 Models for Garden:**
-- `x500` - Quadcopter (default)
-- `x500_depth` - With depth camera
-- `rc_cessna` - Fixed-wing
-- `standard_vtol` - VTOL aircraft
+### Useful launch overrides
+
+```bash
+ros2 launch skyw_swarm swarm_mission_scenario.launch.py \
+  use_sim_time:=true \
+  takeoff_z:=-2.5 \
+  wall_x:=5.0 wall_y:=0.0 wall_z:=-1.0 wall_yaw:=1.57
+```
+
+### Important note about frames
+
+PX4 local setpoints are NED, so **up is negative Z**.  
+If your world reference is ENU `(5, 0, +1)`, the equivalent NED setpoint is typically `(5, 0, -1)` for altitude.

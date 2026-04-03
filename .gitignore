@@ -18,9 +18,3 @@ install/
 log/
 config/
 
-#Workspace files
-src/custom_msgs
-src/sky_bringup
-src/skyw_comm
-src/skyw_interfaces
-src/skyw_utils

@@ -1,4 +1,4 @@
-CBBA task allocation nodes for leader-assisted swarm coordination.
+CBBA task allocation nodes for leader-assisted swarm coordination. (Folder structure needs development)
 
 Competition Profile (1 camera leader + 2 followers)
 - Leader UAV decodes QR and dispatches deterministic assignments.
@@ -32,7 +32,6 @@ Use your existing simulation scripts under skyw_simulation. Example order:
 3) Start QR detection node on the leader UAV
 4) Start CBBA nodes
 
-Note: the exact sim command depends on your chosen script in skyw_simulation/new-method.
 
 Build
 1) colcon build --packages-select skyw_interfaces cbba_task_allocator

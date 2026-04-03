@@ -64,16 +64,6 @@ ros2 topic echo /qr_decoded
 | `binary_threshold` | `45` | `cv2.threshold` value for pyzbar input |
 | `publish_only_on_change` | `true` | Avoid republishing identical payloads |
 
-## QR image helper
-
-Generate textures for simulation:
-
-- `skyw_detection/scripts/qrcode_creater.py`
-
-## Dependencies
-
-- `python3-pyzbar` (declared in `package.xml`; install via apt/rosdep or `pip install pyzbar` if needed).
-
 ## Troubleshooting
 
 - **No `/qr_decoded`:** `ros2 topic hz <your_camera_topic>` — fix the bridge or `camera_topic` first.

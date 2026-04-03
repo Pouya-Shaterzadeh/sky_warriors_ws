@@ -8,18 +8,26 @@ This directory contains ROS 2 packages for the Sky Warrior multi-drone system. E
 - **skyw_control** - Multi-drone control algorithms and formation control
 - **skyw_swarm** - Swarm behavior coordination
 - **skyw_detection** - QR code detection and decoding
-- **skyw_comm** - Communication protocols
 - **skyw_bringup** - Launch configurations
 - **skyw_interfaces** - Custom ROS 2 messages and services
 - **skyw_utils** - Utility functions and tools
 
 ## Quick Start
+git clone
+
+git clone https://github.com/Roboticistprogrammer/sky_warriors_ws.git && cd sky_warriors_ws
+vcs import src/thirdparty < dependencies.repos
+colcon build px4_msgs px4_ros_com
+
 
 To get started with the simulation:
 
-1. Use `skyw_simulation` to spawn 3 drones in Gazebo Garden
-2. Run the Micro-XRCE-DDS Agent to connect ROS 2 and QGroundControl to the UAVs
-3. Launch the desired control or detection package
+1. Use `skyw_bringup` package to spawn 3 drones as follows:
+cd /skyw_warriors_ws/src/skyw_bringup
+./startup.sh "/home/roboticistprogrammer/sky_warrior_ws/src/skyw_bringup/world/world.sdf"
+
+
+2. Go to sky_warrior_ws/src/Sim-Scenario.md to see how to test each step of competition
 
 ## Development Status
 

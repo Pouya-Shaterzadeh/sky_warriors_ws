@@ -27,7 +27,7 @@ It can estimate 3D positions of detected pads and publish RViz markers.
 ### Option A: Direct run
 
 ```bash
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/humble/setup.bash
 source ~/sky_warrior_ws/install/setup.bash
 ros2 run skyw_detection color_detector_node
 ```
