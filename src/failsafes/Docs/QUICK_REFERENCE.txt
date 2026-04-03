@@ -1,0 +1,35 @@
+FAILSAFE QUICK REFERENCE
+========================
+
+Use only:
+- failsafe_manager.py
+- mavsdkrunner.py
+- mavsdkrunner_automated.py
+
+Run:
+----
+cd ~/sky_warriors_ws/src/failsafes/scripts
+# manual/global PX4 shell commands
+python3 mavsdkrunner.py
+
+# automated MAVSDK scenario runner
+python3 mavsdkrunner_automated.py
+
+Common issue:
+-------------
+If failure injection times out, enable:
+param set SYS_FAILURE_EN 1
+param save
+
+Then restart SITL.
+
+RTL landing zones:
+------------------
+Drone0 -> (0,0)
+Drone1 -> (4,3)
+Drone2 -> (8,0)
+
+Expected behavior:
+------------------
+1) Drone enters RTL or LAND (depends on failure type)
+2) Drone returns to its own LZ

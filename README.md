@@ -11,7 +11,7 @@ sky_warrior_ws/
 ├── docker-compose.yml      # Docker Compose configuration
 ├── quick-start.sh          # Interactive helper script
 └── src/                    # ROS 2 packages
-    ├── skyw_control/       # Swarm control algorithms
+── skyw_control/       # Swarm control algorithms
     ├── skyw_simulation/    # Simulation packages
     ├── skyw_bringup/       # Launch configurations
     ├── skyw_comm/          # Communication

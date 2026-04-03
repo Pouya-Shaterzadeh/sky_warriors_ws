@@ -1,0 +1,27 @@
+# failsafe_config.yaml
+# Configuration for End-to-End MAVSDK Failsafe Tests
+
+# Connection settings
+connection:
+  default_url: "udpin://0.0.0.0:14540"
+  timeout_seconds: 30
+
+# Test configuration
+test_settings:
+  takeoff_altitude_m: 10.0
+  flight_mode_timeout_s: 30.0
+  landing_timeout_s: 60.0
+
+# PX4 Parameters explicitly set for testing
+# These ensure failures trigger quickly and deterministically 
+failsafe_parameters:
+  SYS_FAILURE_EN: 1        # Critical: Required for Failure API injection
+  COM_POS_FS_DELAY: 1      # 1s delay before GPS failsafe kicks in
+  BAT_CRIT_THR: 0.07       # 7%
+  BAT_LOW_THR: 0.15        # 15% 
+  BAT_EMERGEN_THR: 0.05    # 5%
+  COM_LOW_BAT_ACT: 1       # Action: 1 = RTL
+  NAV_RCL_ACT: 2           # RC Loss action: 2 = RTL
+  COM_RC_LOSS_T: 0.5       # RC Loss timeout: 0.5s
+  RTL_RETURN_ALT: 30.0     # RTL altitude
+  RTL_DESCEND_ALT: 10.0    # RTL descend altitude

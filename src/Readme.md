@@ -15,10 +15,19 @@ This directory contains ROS 2 packages for the Sky Warrior multi-drone system. E
 
 ## Quick Start
 
-You need **4 separate terminals** to run the full simulation + QR detection pipeline.
 Make sure all prerequisites (ROS 2 Jazzy, Gazebo Harmonic, PX4-Autopilot, MicroXRCE-DDS Agent) are installed before proceeding.
 
-### Terminal 1 — PX4 Simulation (Gazebo + Autopilot)
+### Method 1: Multi-Drone Simulation (Quick Launch)
+
+1. From `src/`, run `./launch_gz_px4_sitl.sh 3 x500` to start Gazebo Harmonic + PX4 SITL and spawn 3 drones
+2. Run the Micro-XRCE-DDS Agent to connect ROS 2 and QGroundControl to the UAVs
+3. Launch the desired control or detection package
+
+### Method 2: Single Drone with QR Detection (4 Terminal Setup)
+
+You need **4 separate terminals** to run the full simulation + QR detection pipeline.
+
+#### Terminal 1 — PX4 Simulation (Gazebo + Autopilot)
 
 Launches the Gazebo Harmonic simulator with the `warehouse1` world and spawns a drone with a mono camera.
 
@@ -30,7 +39,7 @@ PX4_GZ_WORLD=warehouse1 make px4_sitl gz_x500_mono_cam
 
 > **Note:** Wait until you see `INFO [commander] Ready for takeoff!` before proceeding to the next terminals.
 
-### Terminal 2 — Micro-XRCE-DDS Agent (PX4 ↔ ROS 2 Bridge)
+#### Terminal 2 — Micro-XRCE-DDS Agent (PX4 ↔ ROS 2 Bridge)
 
 Bridges PX4 autopilot telemetry (GPS, attitude, battery, etc.) into ROS 2 topics.
 
@@ -38,7 +47,7 @@ Bridges PX4 autopilot telemetry (GPS, attitude, battery, etc.) into ROS 2 topics
 MicroXRCEAgent udp4 -p 8888
 ```
 
-### Terminal 3 — Camera Bridge (Gazebo ↔ ROS 2)
+#### Terminal 3 — Camera Bridge (Gazebo ↔ ROS 2)
 
 Bridges the drone's camera feed from Gazebo transport into a ROS 2 image topic for the detection node.
 
@@ -48,7 +57,7 @@ ros2 run ros_gz_bridge parameter_bridge /camera@sensor_msgs/msg/Image@gz.msgs.Im
   --ros-args -r /camera:=/depth_cam/rgb/image_raw
 ```
 
-### Terminal 4 — QR Code Detection Node
+#### Terminal 4 — QR Code Detection Node
 
 Runs the Python-based QR code detector that processes the camera feed in real-time.
 

@@ -16,7 +16,6 @@ Docker
 #Build files
 install/
 log/
-scripts/
 config/
 
 #Workspace files
