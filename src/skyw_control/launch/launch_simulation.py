@@ -2,6 +2,7 @@
 
 import json
 from launch import LaunchDescription
+from launch.actions import ExecuteProcess
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 import os
@@ -143,5 +144,39 @@ def generate_launch_description():
             namespace='simulation',
             parameters=[{"nb_drones": nb_drones}]
         ))
+
+    # Offboard mode helper (sends continuous offboard commands)
+    ld.add_action(
+        Node(
+            package='skyw_control',
+            executable='offboard_helper.py',
+            name='offboard_helper',
+            namespace='simulation',
+            output='screen'
+        ))
+
+    # Launch QGroundControl
+    # Check common QGC locations
+    qgc_locations = [
+        os.path.expanduser("~/DroneTools/QGroundControl.AppImage"),
+        "/usr/bin/qgroundcontrol",
+        "/usr/local/bin/qgroundcontrol",
+        os.path.expanduser("~/QGroundControl.AppImage")
+    ]
+    
+    qgc_path = None
+    for path in qgc_locations:
+        if os.path.exists(path):
+            qgc_path = path
+            break
+    
+    if qgc_path:
+        ld.add_action(
+            ExecuteProcess(
+                cmd=[qgc_path],
+                name='qgroundcontrol',
+                output='screen'
+            )
+        )
 
     return ld

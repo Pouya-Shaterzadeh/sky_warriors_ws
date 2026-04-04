@@ -50,11 +50,17 @@ class SimulationScript(Node):
         with open('/tmp/mavlink-router.conf', 'w') as f:
             f.write(mavlink_config)
         
-        subprocess.Popen(
-            ["mavlink-routerd", "-c", "/tmp/mavlink-router.conf"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
+        # Try to start mavlink-routerd, but don't fail if not available
+        try:
+            subprocess.Popen(
+                ["mavlink-routerd", "-c", "/tmp/mavlink-router.conf"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            self.get_logger().info("MAVLink router started successfully")
+        except FileNotFoundError:
+            self.get_logger().warn("mavlink-routerd not found - QGC may not connect properly. Install with: sudo apt install mavlink-router")
+        
         time.sleep(1)     
 
         # Launch Gazebo with the world FIRST
