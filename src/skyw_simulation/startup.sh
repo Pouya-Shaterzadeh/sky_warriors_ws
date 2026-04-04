@@ -8,15 +8,20 @@ PX4_BIN="${PX4_DIR}/build/px4_sitl_default/bin/px4"
 PX4_WORLDS_DIR="${PX4_DIR}/Tools/simulation/gz/worlds"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/gz_env.sh"
-CUSTOM_WORLD="${1:-}"
+# Use provided world file, or default to bringup world.sdf
+DEFAULT_WORLD="$(cd "${SCRIPT_DIR}/../skyw_bringup/world" && pwd)/world.sdf"
+CUSTOM_WORLD="${1:-$DEFAULT_WORLD}"
 # Fixed name under PX4 worlds/ (px4-rc.gzsim sources gz_env.sh and resets PX4_GZ_WORLDS to here).
 SKYW_WORLD_NAME="skyw_hexagon"
 RMW_FASTRTPS_USE_QOS_FROM_XML=1
-FASTDDS_DEFAULT_PROFILES_FILE=/home/roboticistprogrammer/sky_warrior_ws/src/skyw_swarm/config/fastdds.xml
+# Dynamically determine workspace root (go up two levels from SCRIPT_DIR)
+WS_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+FASTDDS_DEFAULT_PROFILES_FILE="${WS_DIR}/src/skyw_swarm/config/fastdds.xml"
 
 echo "PX4 directory: ${PX4_DIR}"
 echo "Session name: ${session}"
 echo "Fast DDS profile: ${FASTDDS_DEFAULT_PROFILES_FILE}"
+echo "World file: ${CUSTOM_WORLD}"
 
 PX4_ENV_PREFIX=""
 if [ -n "${CUSTOM_WORLD}" ]; then
