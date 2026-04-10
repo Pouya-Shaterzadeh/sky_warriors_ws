@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>state_manager</name>
+  <version>0.0.1</version>
+  <description>Centralized swarm state management using FSM for UAVs.</description>
+  <maintainer email="your_email@example.com">your_name</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <test_depend>pytest</test_depend>
+</package>

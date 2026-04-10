@@ -1,0 +1,3 @@
+<launch>
+    <node pkg="state_manager" exec="state_manager_node" name="state_manager_node" output="screen"/>
+</launch>
