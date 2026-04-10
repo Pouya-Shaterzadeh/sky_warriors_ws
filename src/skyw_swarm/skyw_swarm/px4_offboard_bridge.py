@@ -122,27 +122,15 @@ class PX4OffboardBridge(Node):
 
             self.offboard_ticks[i] = self.offboard_ticks.get(i, 0) + 1
 
-            # Delay arming/offboard by 100 ticks (5 seconds) to allow multi-instance EKF to finish booting
-            if self.auto_offboard and i not in self.sent_offboard and self.offboard_ticks[i] >= 100:
-                import subprocess
-                try:
-                    tmux_window = f"px4-sitl:{i - 1}"
-                    subprocess.run(['tmux', 'send-keys', '-t', tmux_window, 'commander mode offboard', 'Enter'], check=True)
-                    self.get_logger().info(f"Engaged offboard mode for drone {i} via tmux")
-                except Exception as e:
-                    self.get_logger().warn(f"Tmux offboard failed, falling back to VehicleCommand: {e}")
-                    self._send_vehicle_command(i, 176, 1.0, 6.0)
+            # Delay arming/offboard by 140 ticks (7 seconds total)
+            if self.auto_offboard and i not in self.sent_offboard and self.offboard_ticks[i] >= 140:
+                self.get_logger().info(f"Engaging offboard mode for drone {i} via ROS Topic...")
+                self._send_vehicle_command(i, 176, 1.0, 6.0)
                 self.sent_offboard.add(i)
-
-            if self.auto_arm and i not in self.sent_arm and self.offboard_ticks[i] >= 100:
-                import subprocess
-                try:
-                    tmux_window = f"px4-sitl:{i - 1}"
-                    subprocess.run(['tmux', 'send-keys', '-t', tmux_window, 'commander arm', 'Enter'], check=True)
-                    self.get_logger().info(f"Armed drone {i} via tmux")
-                except Exception as e:
-                    self.get_logger().warn(f"Tmux arm failed, falling back to VehicleCommand: {e}")
-                    self._send_vehicle_command(i, 400, 1.0, 0.0)
+ 
+            if self.auto_arm and i not in self.sent_arm and self.offboard_ticks[i] >= 140:
+                self.get_logger().info(f"Arming drone {i} via ROS Topic...")
+                self._send_vehicle_command(i, 400, 1.0, 0.0)
                 self.sent_arm.add(i)
 
     @staticmethod
@@ -159,10 +147,12 @@ class PX4OffboardBridge(Node):
         msg.param1 = float(param1)
         msg.param2 = float(param2)
         msg.command = int(command)
-        msg.target_system = int(self.target_system_start + (idx - 1))
-        msg.target_component = int(self.target_component)
-        msg.source_system = int(self.target_system_start + (idx - 1))
-        msg.source_component = int(self.target_component)
+        # Target system 0 (Broadcast) ensures the command is accepted within the drone's namespace
+        msg.target_system = 0
+        msg.target_component = 1
+        # Source system 255 (GCS) ensures the drone trusts the command
+        msg.source_system = 255
+        msg.source_component = 1
         msg.from_external = True
         self.command_pubs[idx].publish(msg)
 

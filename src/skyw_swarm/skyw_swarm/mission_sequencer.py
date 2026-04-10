@@ -1,65 +1,56 @@
 #!/usr/bin/env python3
 
-import math
-
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import PoseStamped, Quaternion
 from std_msgs.msg import String
+from geometry_msgs.msg import PoseStamped, Quaternion
+import math
+import json
+import numpy as np
 
+# Import our formation math
+try:
+    from skyw_swarm import formation_math
+except ImportError:
+    import formation_math
 
-def yaw_to_quaternion(yaw: float) -> Quaternion:
+def yaw_to_quaternion(yaw):
     q = Quaternion()
-    q.w = math.cos(yaw * 0.5)
     q.x = 0.0
     q.y = 0.0
-    q.z = math.sin(yaw * 0.5)
+    q.z = math.sin(yaw / 2.0)
+    q.w = math.cos(yaw / 2.0)
     return q
 
-
 class MissionSequencer(Node):
-    """
-    High-level mission sequencer for a 3-drone QR scenario.
-    - Keeps all drones in offboard by streaming setpoints.
-    - Takes off all drones to a shared altitude.
-    - Sends drone1 (x500_mono_cam) to scan all 6 walls until a decodable QR is found.
-    - Controls drone 2 & 3 as followers in a V-formation relative to drone 1.
-    """
 
     def __init__(self):
         super().__init__('mission_sequencer')
 
         self.declare_parameter('drone_count', 3)
         self.declare_parameter('publish_rate_hz', 20.0)
-        self.declare_parameter('takeoff_hold_s', 8.0)
-        self.declare_parameter('transit_tolerance_m', 0.5)
-        self.declare_parameter('target_hold_s', 15.0)
-
-        # PX4 local frame default is NED, so altitude up is negative Z.
-        self.declare_parameter('takeoff_z', -2.5)
-        self.declare_parameter('wall_z', -1.0)
-
-        if not self.has_parameter('use_sim_time'):
-            self.declare_parameter('use_sim_time', False)
+        self.declare_parameter('transit_z', -6.0) 
+        self.declare_parameter('wall_z', -2.0)
+        self.declare_parameter('transit_tolerance_m', 0.5) 
+        self.declare_parameter('safety_offset_m', 2.0) 
 
         self.drone_count = int(self.get_parameter('drone_count').value)
         self.publish_rate_hz = float(self.get_parameter('publish_rate_hz').value)
-        self.takeoff_hold_s = float(self.get_parameter('takeoff_hold_s').value)
-        self.transit_tolerance_m = float(self.get_parameter('transit_tolerance_m').value)
-        self.target_hold_s = float(self.get_parameter('target_hold_s').value)
-        self.takeoff_z = float(self.get_parameter('takeoff_z').value)
+        self.transit_z = float(self.get_parameter('transit_z').value)
         self.wall_z = float(self.get_parameter('wall_z').value)
+        self.transit_tolerance_m = float(self.get_parameter('transit_tolerance_m').value)
+        self.safety_offset_m = float(self.get_parameter('safety_offset_m').value)
 
         self.takeoff_timer_start = None
 
-        # Hardcode Gazebo Spawns to facilitate Local-to-Global translation
+        # Hardcode Gazebo Spawns
         self.gz_spawns = {
             1: {'x': -7.0, 'y': 5.0},
             2: {'x': -7.0, 'y': 4.0},
             3: {'x': -7.0, 'y': 6.0},
         }
 
-        # 6 fixed locations in front of the hexagon walls (Gazebo ENU Coordinates)
+        # 6 fixed targets
         self.wall_waypoints = [
             {'x':  4.00, 'y':  0.00, 'gz_yaw':  0.000},
             {'x':  2.00, 'y':  3.46, 'gz_yaw':  1.047},
@@ -70,10 +61,24 @@ class MissionSequencer(Node):
         ]
         self.current_wp_idx = 0
 
-        # Drone 1 Targets in PX4 Local NED space
+        # Dynamics (Leader Target)
         self.d1_target_x = 0.0
         self.d1_target_y = 0.0
+        self.d1_target_z = self.transit_z
         self.d1_target_yaw = 0.0
+        
+        self.overwatch_gz_x = 0.0
+        self.overwatch_gz_y = 0.0
+        
+        # Swarm Config
+        self.current_spacing = 2.0
+        self.target_formation = 'v'
+        self.active_formation = 'column' 
+        self.payload_h = 0.0
+        self.next_wall_ovr = None
+        
+        # Payload Buffer
+        self.pending_payload = None
 
         self.setpoint_pubs = {}
         self.last_pose = {}
@@ -89,14 +94,12 @@ class MissionSequencer(Node):
 
         self.state = 'TAKEOFF'
         self.state_started = self.get_clock().now()
-        self.last_qr_payload = ''
         self.qr_seen = False
 
         period = 1.0 / self.publish_rate_hz if self.publish_rate_hz > 0.0 else 0.05
         self.timer = self.create_timer(period, self._tick)
-        self.get_logger().info('Mission sequencer started! Executing 6-wall scan.')
+        self.get_logger().info('Mission sequencer started! Final-Station Hover mode active.')
 
-    # Coordinate mapping: PX4 Local NED <-> Gazebo Global ENU
     def _local_to_global(self, idx: int, px4_x: float, px4_y: float):
         gz_x = px4_y + self.gz_spawns[idx]['x']
         gz_y = px4_x + self.gz_spawns[idx]['y']
@@ -107,129 +110,197 @@ class MissionSequencer(Node):
         px4_y = gz_x - self.gz_spawns[idx]['x']
         return px4_x, px4_y
 
-    def _pose_cb(self, msg: PoseStamped, idx: int):
-        self.last_pose[idx] = msg
-
     def _qr_cb(self, msg: String):
-        payload = msg.data.strip()
-        if payload:
+        if self.state == 'MISSION_DONE':
+            return
+        try:
+            payload = msg.data.strip()
+            self.pending_payload = json.loads(payload)
             self.qr_seen = True
-            self.last_qr_payload = payload
+        except:
+            self.qr_seen = True
 
-    def _elapsed_s(self) -> float:
-        return (self.get_clock().now() - self.state_started).nanoseconds / 1e9
-
-    def _publish_setpoint(self, idx: int, px4_x: float, px4_y: float, px4_z: float, px4_yaw: float):
-        msg = PoseStamped()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = 'map'
-        msg.pose.position.x = float(px4_x)
-        msg.pose.position.y = float(px4_y)
-        msg.pose.position.z = float(px4_z)
-        msg.pose.orientation = yaw_to_quaternion(px4_yaw)
-        self.setpoint_pubs[idx].publish(msg)
-
-    def _drone_near_target(self, idx: int, x: float, y: float, z: float) -> bool:
-        pose = self.last_pose.get(idx)
-        if pose is None:
-            return False
-        dx = pose.pose.position.x - x
-        dy = pose.pose.position.y - y
-        dz = pose.pose.position.z - z
-        dist = math.sqrt(dx * dx + dy * dy + dz * dz)
-        return dist <= self.transit_tolerance_m
-
-    def _set_state(self, new_state: str):
-        if new_state != self.state:
-            self.state = new_state
-            self.state_started = self.get_clock().now()
-            self.get_logger().info(f'Mission state -> {new_state}')
-
-    def _update_wall_targets(self):
-        wp = self.wall_waypoints[self.current_wp_idx]
-        gz_x = wp['x']
-        gz_y = wp['y']
-        gz_yaw = wp['gz_yaw']
-
-        px4_x, px4_y = self._global_to_local(1, gz_x, gz_y)
-        self.d1_target_x = px4_x
-        self.d1_target_y = px4_y
-        self.d1_target_yaw = (math.pi / 2.0) - gz_yaw
+    def _apply_buffered_payload(self):
+        if not self.pending_payload:
+            return
+            
+        config = self.pending_payload
+        
+        # 1. Spacing & Formation
+        self.current_spacing = float(config.get('s', self.current_spacing))
+        self.target_formation = str(config.get('f', self.target_formation)).lower()
+        
+        # 2. Timing
+        self.payload_h = float(config.get('h', 0.0))
+        
+        # 3. Next Wall (Robust parsing)
+        next_n = config.get('n')
+        if next_n is not None:
+            try:
+                self.next_wall_ovr = int(next_n)
+            except (ValueError, TypeError):
+                self.next_wall_ovr = None # Ignore "N/A" strings
+        
+        # 4. Altitude (a)
+        new_a = config.get('a')
+        if new_a is not None:
+            self.d1_target_z = -abs(float(new_a))
+            
+        # 5. Handle nested Turkish gorev keys
+        gorev = config.get('gorev', {})
+        form = gorev.get('formasyon', {})
+        if form.get('aktif'):
+            self.current_spacing = float(form.get('spacing', self.current_spacing))
+            self.target_formation = str(form.get('tip', self.target_formation)).lower()
+        
+        irtifa = gorev.get('irtifa_degisim', {})
+        if irtifa.get('aktif'):
+            self.d1_target_z = -abs(float(irtifa.get('deger', abs(self.d1_target_z))))
+            
+        self.active_formation = self.target_formation
+        self.pending_payload = None
 
     def _tick(self):
+        now = self.get_clock().now()
+        elapsed = (now - self.state_started).nanoseconds / 1e9
+
         if self.state == 'TAKEOFF':
             all_ready = True
             for i in range(1, self.drone_count + 1):
-                self._publish_setpoint(i, 0.0, 0.0, self.takeoff_z, 0.0)
+                self._publish_setpoint(i, 0.0, 0.0, self.transit_z, 0.0)
                 pose = self.last_pose.get(i)
-                if pose is None or abs(pose.pose.position.z - self.takeoff_z) > self.transit_tolerance_m:
+                if pose is None or abs(pose.pose.position.z - self.transit_z) > self.transit_tolerance_m:
                     all_ready = False
 
             if all_ready:
                 if self.takeoff_timer_start is None:
-                    self.takeoff_timer_start = self._elapsed_s()
-                elif self._elapsed_s() - self.takeoff_timer_start >= self.takeoff_hold_s:
-                    self.current_wp_idx = 0
-                    self._update_wall_targets()
-                    self._set_state('TRANSIT_TO_WALL')
-            else:
-                self.takeoff_timer_start = None
+                    self.takeoff_timer_start = elapsed
+                elif elapsed - self.takeoff_timer_start >= 3.0:
+                    self._set_state('TRANSIT_TO_HUB')
             return
 
-        elif self.state == 'TRANSIT_TO_WALL':
-            # It flies across the map at takeoff_z. Once it spans the XY location, it drops.
-            if self._drone_near_target(1, self.d1_target_x, self.d1_target_y, self.takeoff_z):
+        elif self.state == 'TRANSIT_TO_HUB':
+            self.active_formation = 'column' 
+            self.d1_target_z = self.transit_z
+            tx, ty = self._global_to_local(1, 0.0, 0.0)
+            self.d1_target_x, self.d1_target_y = tx, ty
+            
+            if self._drone_near_target(1, tx, ty, self.transit_z):
+                self._update_wall_targets(safety_gap=True)
+                self._set_state('TRANSIT_HIGH')
+
+        elif self.state == 'TRANSIT_HIGH':
+            if self._drone_near_target(1, self.d1_target_x, self.d1_target_y, self.transit_z):
+                self._set_state('STABILIZE_HIGH')
+
+        elif self.state == 'STABILIZE_HIGH':
+            anchor_px4_x, anchor_px4_y = self.d1_target_x, self.d1_target_y
+            self.overwatch_gz_x, self.overwatch_gz_y = self._local_to_global(1, anchor_px4_x, anchor_px4_y)
+            if elapsed >= 3.0:
+                self.d1_target_z = self.wall_z
+                self._set_state('DESCEND_VERTICAL')
+
+        elif self.state == 'DESCEND_VERTICAL':
+            if self._drone_near_target(1, self.d1_target_x, self.d1_target_y, self.wall_z):
+                self._update_wall_targets(safety_gap=False)
+                self._set_state('NUDGE_TO_SCAN')
+
+        elif self.state == 'NUDGE_TO_SCAN':
+            if self._drone_near_target(1, self.d1_target_x, self.d1_target_y, self.wall_z):
                 self._set_state('HOLD_AND_SCAN')
 
         elif self.state == 'HOLD_AND_SCAN':
             if self.qr_seen:
-                self.get_logger().info(f'QR dynamically decoded: {self.last_qr_payload}')
-                self._set_state('MISSION_DONE')
-            elif self._elapsed_s() >= self.target_hold_s:
-                self.get_logger().warn(f'QR not decoded at wall {self.current_wp_idx + 1}. Transitioning.')
-                self.current_wp_idx += 1
-                if self.current_wp_idx < len(self.wall_waypoints):
-                    self._update_wall_targets()
-                    self._set_state('TRANSIT_TO_WALL')
-                else:
-                    self.get_logger().error('All 6 walls fully scanned but no decoded QR payload found.')
-                    self._set_state('MISSION_DONE')
+                self._apply_buffered_payload()
+                self._set_state('PERFORM_TASK')
+            elif elapsed >= 10.0:
+                self._prepare_next_wall()
 
-        if self.state in ['HOLD_AND_SCAN', 'MISSION_DONE']:
-            z_target = self.wall_z
-        else:
-            z_target = self.takeoff_z
+        elif self.state == 'PERFORM_TASK':
+            if elapsed >= self.payload_h:
+                self._prepare_next_wall()
 
-        self._publish_setpoint(1, self.d1_target_x, self.d1_target_y, z_target, self.d1_target_yaw)
+        # --- Setpoint Publishing ---
+        l_x, l_y, l_z, l_yaw = self.d1_target_x, self.d1_target_y, self.d1_target_z, self.d1_target_yaw
+        l_gz_x, l_gz_y = self._local_to_global(1, l_x, l_y)
+        self._publish_setpoint(1, l_x, l_y, l_z, l_yaw)
 
-        # Retrieve actual Drone 1 telemetry, map to Gazebo, calculate offsets, map back to Local PX4
-        d1_actual = self.last_pose.get(1)
-        if d1_actual:
-            a_px4_x = d1_actual.pose.position.x
-            a_px4_y = d1_actual.pose.position.y
-        else:
-            a_px4_x = self.d1_target_x
-            a_px4_y = self.d1_target_y
-
-        gz_x, gz_y = self._local_to_global(1, a_px4_x, a_px4_y)
+        # Decide which reference to use for followers
+        is_overwatch = self.state in ['DESCEND_VERTICAL', 'NUDGE_TO_SCAN', 'HOLD_AND_SCAN']
+        anchor_x = self.overwatch_gz_x if is_overwatch else l_gz_x
+        anchor_y = self.overwatch_gz_y if is_overwatch else l_gz_y
         
-        # Follower V-formation offsets calculated cleanly in Gazebo metrics
+        current_form = 'column' if self.state in ['TRANSIT_HIGH', 'TRANSIT_TO_HUB', 'STABILIZE_HIGH'] else self.active_formation
+        if is_overwatch:
+             current_form = 'column' # Narrow Overwatch
+
+        offsets = formation_math.get_offsets(current_form, self.current_spacing, self.drone_count)
+
         for i in range(2, self.drone_count + 1):
-            if i == 2:
-                # Right rear in Gazebo (relative to +X wall target)
-                t_gz_x = gz_x - 2.0 * math.cos((math.pi / 2.0) - self.d1_target_yaw) + 2.0 * math.sin((math.pi / 2.0) - self.d1_target_yaw)
-                t_gz_y = gz_y - 2.0 * math.sin((math.pi / 2.0) - self.d1_target_yaw) - 2.0 * math.cos((math.pi / 2.0) - self.d1_target_yaw)
-            elif i == 3:
-                # Left rear in Gazebo
-                t_gz_x = gz_x - 2.0 * math.cos((math.pi / 2.0) - self.d1_target_yaw) - 2.0 * math.sin((math.pi / 2.0) - self.d1_target_yaw)
-                t_gz_y = gz_y - 2.0 * math.sin((math.pi / 2.0) - self.d1_target_yaw) + 2.0 * math.cos((math.pi / 2.0) - self.d1_target_yaw)
+            if self.state == 'TAKEOFF':
+                self._publish_setpoint(i, 0.0, 0.0, self.transit_z, 0.0)
             else:
-                t_gz_x = gz_x
-                t_gz_y = gz_y
+                f_x, f_y = offsets[i-1]
+                t_gz_x = anchor_x + f_x * math.cos(l_yaw) - f_y * math.sin(l_yaw)
+                t_gz_y = anchor_y + f_x * math.sin(l_yaw) + f_y * math.cos(l_yaw)
+                t_px4_x, t_px4_y = self._global_to_local(i, t_gz_x, t_gz_y)
+                
+                if is_overwatch:
+                    self._publish_setpoint(i, t_px4_x, t_px4_y, self.wall_z, l_yaw)
+                else:
+                    self._publish_setpoint(i, t_px4_x, t_px4_y, l_z, l_yaw)
 
-            t_px4_x, t_px4_y = self._global_to_local(i, t_gz_x, t_gz_y)
-            self._publish_setpoint(i, t_px4_x, t_px4_y, z_target, self.d1_target_yaw)
+    def _prepare_next_wall(self):
+        # Check for next wall override (n)
+        if self.next_wall_ovr is not None:
+            self.current_wp_idx = int(self.next_wall_ovr) - 1
+            self.next_wall_ovr = None
+        else:
+            self.current_wp_idx += 1
+            
+        if self.current_wp_idx < len(self.wall_waypoints):
+            self.qr_seen = False 
+            self.payload_h = 0.0 
+            self._set_state('TRANSIT_TO_HUB') 
+        else:
+            self.get_logger().info('Swarm journey complete. Keeping final station position.')
+            self._set_state('MISSION_DONE')
 
+    def _drone_near_target(self, idx, x, y, z):
+        pose = self.last_pose.get(idx)
+        if not pose: return False
+        dist = math.sqrt((pose.pose.position.x - x)**2 + (pose.pose.position.y - y)**2 + (pose.pose.position.z - z)**2)
+        return dist <= self.transit_tolerance_m
+
+    def _set_state(self, new_state):
+        if new_state != self.state:
+            self.state = new_state
+            self.state_started = self.get_clock().now()
+            self.get_logger().info(f'State -> {new_state}')
+
+    def _update_wall_targets(self, safety_gap=True):
+        wp = self.wall_waypoints[self.current_wp_idx]
+        gz_x, gz_y, gz_yaw = wp['x'], wp['y'], wp['gz_yaw']
+
+        if safety_gap:
+            gz_x -= self.safety_offset_m * math.cos(gz_yaw)
+            gz_y -= self.safety_offset_m * math.sin(gz_yaw)
+
+        px4_x, px4_y = self._global_to_local(1, gz_x, gz_y)
+        self.d1_target_x, self.d1_target_y = px4_x, px4_y
+        self.d1_target_yaw = (math.pi / 2.0) - gz_yaw
+        self.d1_target_z = self.transit_z if safety_gap else self.wall_z
+
+    def _pose_cb(self, msg, idx):
+        self.last_pose[idx] = msg
+
+    def _publish_setpoint(self, idx, x, y, z, yaw):
+        m = PoseStamped()
+        m.header.stamp = self.get_clock().now().to_msg()
+        m.header.frame_id = 'map'
+        m.pose.position.x, m.pose.position.y, m.pose.position.z = float(x), float(y), float(z)
+        m.pose.orientation = yaw_to_quaternion(yaw)
+        self.setpoint_pubs[idx].publish(m)
 
 def main():
     rclpy.init()

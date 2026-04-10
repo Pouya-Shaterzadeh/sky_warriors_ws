@@ -73,25 +73,17 @@ def generate_launch_description():
     # The ros_gz_bridge parameter_bridge accepts the full Gz→ROS mapping as a
     # single argument string:  <gz_topic>@<ros_type>[<gz_type>
     # Topic contains substitutions so we pass it as a list that launch will join.
+    # Construct the full Gazebo topic string
+    camera_gz_topic = ['/world/', world_name, '/model/', cam_model, '/link/camera_link/sensor/imager/image']
+
     camera_bridge = Node(
-        package='ros_gz_bridge',
-        executable='parameter_bridge',
+        package='ros_gz_image',
+        executable='image_bridge',
         name='camera_image_bridge',
         output='screen',
-        arguments=[[
-            '/world/', world_name,
-            '/model/', cam_model,
-            '/link/camera_link/sensor/imager/image'
-            '@sensor_msgs/msg/Image[gz.msgs.Image',
-        ]],
-        # Remap the long Gz-style topic name → the short /camera/image_raw topic
-        # so the QR detector node stays decoupled from the Gz world/model names.
+        arguments=[camera_gz_topic],
         remappings=[
-            (
-                ['/world/', world_name, '/model/', cam_model,
-                 '/link/camera_link/sensor/imager/image'],
-                camera_topic,
-            ),
+            (camera_gz_topic, camera_topic),
         ],
     )
 

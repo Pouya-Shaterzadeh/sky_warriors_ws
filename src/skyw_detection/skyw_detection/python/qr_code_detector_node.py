@@ -93,7 +93,13 @@ class QrCodeDetectorNode(Node):
             )
 
         if self._enable_viz:
-            cv2.imshow("qrcode_detector", image)
+            # Scale down for a smaller, more compact GUI window
+            display_scale = 0.5
+            width = int(image.shape[1] * display_scale)
+            height = int(image.shape[0] * display_scale)
+            small_img = cv2.resize(image, (width, height), interpolation=cv2.INTER_AREA)
+            
+            cv2.imshow("Camera output", small_img)
             cv2.waitKey(1)
 
 

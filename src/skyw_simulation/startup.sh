@@ -56,15 +56,15 @@ fi
 echo "Starting new tmux session '${session}'..."
 
 tmux new-session -d -s "${session}" -n "PX4-1" \
-	"${PX4_ENV_PREFIX}cd \"${PX4_DIR}\" && unset PX4_GZ_STANDALONE; PX4_SYS_AUTOSTART=4010 PX4_GZ_MODEL_POSE=\"-7,5,0.5\" PX4_SIM_MODEL=gz_x500_mono_cam \"${PX4_BIN}\" -i 1 2>&1 | grep --line-buffered -E -v 'INFO  \[mavlink\] Ignore command (401|512|521) from 255/190 to'"
+	"${PX4_ENV_PREFIX}cd \"${PX4_DIR}\" && unset PX4_GZ_STANDALONE; PX4_SYS_AUTOSTART=4010 PX4_SYS_ID=1 PX4_GZ_MODEL_POSE=\"-7,5,0.5\" PX4_SIM_MODEL=gz_x500_mono_cam \"${PX4_BIN}\" -i 1 2>&1 | grep --line-buffered -E -v 'INFO  \[mavlink\] Ignore command (401|512|521) from 255/190 to'"
 
 sleep 12
 
 tmux new-window -t "${session}:" -n "PX4-2" \
-	"${PX4_ENV_PREFIX}cd \"${PX4_DIR}\" && PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4001 PX4_GZ_MODEL_POSE=\"-7,4,0.5\" PX4_SIM_MODEL=gz_x500 \"${PX4_BIN}\" -i 2 2>&1 | grep --line-buffered -E -v 'INFO  \[mavlink\] Ignore command (401|512|521) from 255/190 to'"
+	"${PX4_ENV_PREFIX}cd \"${PX4_DIR}\" && PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4001 PX4_SYS_ID=2 PX4_GZ_MODEL_POSE=\"-7,4,0.5\" PX4_SIM_MODEL=gz_x500 \"${PX4_BIN}\" -i 2 2>&1 | grep --line-buffered -E -v 'INFO  \[mavlink\] Ignore command (401|512|521) from 255/190 to'"
 
 tmux new-window -t "${session}:" -n "PX4-3" \
-	"${PX4_ENV_PREFIX}cd \"${PX4_DIR}\" && PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4001 PX4_GZ_MODEL_POSE=\"-7,6,0.5\" PX4_SIM_MODEL=gz_x500 \"${PX4_BIN}\" -i 3 2>&1 | grep --line-buffered -E -v 'INFO  \[mavlink\] Ignore command (401|512|521) from 255/190 to'"
+	"${PX4_ENV_PREFIX}cd \"${PX4_DIR}\" && PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4001 PX4_SYS_ID=3 PX4_GZ_MODEL_POSE=\"-7,6,0.5\" PX4_SIM_MODEL=gz_x500 \"${PX4_BIN}\" -i 3 2>&1 | grep --line-buffered -E -v 'INFO  \[mavlink\] Ignore command (401|512|521) from 255/190 to'"
 
 tmux new-window -t "${session}:" -n "MicroXRCE" \
 	"export RMW_FASTRTPS_USE_QOS_FROM_XML=1 FASTDDS_DEFAULT_PROFILES_FILE=\"${FASTDDS_DEFAULT_PROFILES_FILE}\" && MicroXRCEAgent udp4 -p 8888"
