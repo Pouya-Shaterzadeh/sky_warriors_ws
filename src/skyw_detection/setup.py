@@ -29,7 +29,8 @@ setup(
         'console_scripts': [
             'color_detector_node = skyw_detection.python.color_detector_node:main',
             'qrcode_detector = skyw_detection.python.qr_code_detector_node:main',
+            'swarm_pad_detector = skyw_detection.python.pad_detection_node:main',
+            'landing_pad_tracker = skyw_detection.python.pad_tracker_node:main',
         ],
     },
 )
-

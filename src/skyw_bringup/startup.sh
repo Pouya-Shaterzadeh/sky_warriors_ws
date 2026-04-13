@@ -58,10 +58,10 @@ tmux new-session -d -s "${session}" -n "PX4-1" \
 sleep 12
 
 tmux new-window -t "${session}:" -n "PX4-2" \
-	"${PX4_ENV_PREFIX}cd \"${PX4_DIR}\" && PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4001 PX4_GZ_MODEL_POSE=\"-7,4\" PX4_SIM_MODEL=gz_x500 \"${PX4_BIN}\" -i 2"
+	"${PX4_ENV_PREFIX}cd \"${PX4_DIR}\" && PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4001 PX4_GZ_MODEL_POSE=\"-7,4\" PX4_SIM_MODEL=gz_x500_mono_cam_down \"${PX4_BIN}\" -i 2"
 
 tmux new-window -t "${session}:" -n "PX4-3" \
-	"${PX4_ENV_PREFIX}cd \"${PX4_DIR}\" && PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4001 PX4_GZ_MODEL_POSE=\"-7,6\" PX4_SIM_MODEL=gz_x500 \"${PX4_BIN}\" -i 3"
+	"${PX4_ENV_PREFIX}cd \"${PX4_DIR}\" && PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4001 PX4_GZ_MODEL_POSE=\"-7,6\" PX4_SIM_MODEL=gz_x500_mono_cam_down \"${PX4_BIN}\" -i 3"
 
 tmux new-window -t "${session}:" -n "MicroXRCE" \
 	"export RMW_FASTRTPS_USE_QOS_FROM_XML=1 FASTDDS_DEFAULT_PROFILES_FILE=\"${FASTDDS_DEFAULT_PROFILES_FILE}\" && MicroXRCEAgent udp4 -p 8888"

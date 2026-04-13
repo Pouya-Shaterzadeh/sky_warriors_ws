@@ -21,6 +21,10 @@ class PadDetection:
     centroid_px: Tuple[float, float]  # (u, v)
     area_px: float
     bbox_xywh: Tuple[int, int, int, int]  # (x, y, w, h)
+    radius_px: float
+    circularity: float
+    fill_ratio: float
+    confidence: float
 
 
 class ColorDetector:
@@ -49,6 +53,9 @@ class ColorDetector:
 
         self.min_contour_area: float = float(general.get("min_contour_area", 500.0))
         self.max_contour_area: float = float(general.get("max_contour_area", 50000.0))
+        self.min_circularity: float = float(general.get("min_circularity", 0.5))
+        self.min_fill_ratio: float = float(general.get("min_fill_ratio", 0.45))
+        self.min_radius_px: float = float(general.get("min_radius_px", 8.0))
         self.pad_real_size_m: float = float(general.get("pad_real_size_m", 1.0))
         self.debug: bool = bool(general.get("debug", False))
 
@@ -60,8 +67,8 @@ class ColorDetector:
         self.blue_lower = np.array(blue.get("hsv_lower", [100, 100, 100]), dtype=np.uint8)
         self.blue_upper = np.array(blue.get("hsv_upper", [140, 255, 255]), dtype=np.uint8)
 
-        self.morph_kernel_size = int(morph_kernel_size)
-        self.morph_iterations = int(morph_iterations)
+        self.morph_kernel_size = int(general.get("morph_kernel_size", morph_kernel_size))
+        self.morph_iterations = int(general.get("morph_iterations", morph_iterations))
         if self.morph_kernel_size >= 3:
             self.kernel = cv2.getStructuringElement(
                 cv2.MORPH_ELLIPSE, (self.morph_kernel_size, self.morph_kernel_size)
@@ -107,25 +114,55 @@ class ColorDetector:
             if area < self.min_contour_area or area > self.max_contour_area:
                 continue
 
+            perimeter = float(cv2.arcLength(contour, True))
+            if perimeter <= 1e-6:
+                continue
+            circularity = float((4.0 * np.pi * area) / max(perimeter * perimeter, 1e-6))
+            if circularity < self.min_circularity:
+                continue
+
+            (circle_cx, circle_cy), radius = cv2.minEnclosingCircle(contour)
+            if radius < self.min_radius_px:
+                continue
+
             # Centroid from moments.
             m = cv2.moments(contour)
             if abs(m["m00"]) < 1e-12:
-                continue
-            cx = float(m["m10"] / m["m00"])
-            cy = float(m["m01"] / m["m00"])
+                cx = float(circle_cx)
+                cy = float(circle_cy)
+            else:
+                cx = float(m["m10"] / m["m00"])
+                cy = float(m["m01"] / m["m00"])
 
             x, y, w, h = cv2.boundingRect(contour)
+            fill_ratio = float(area / max(float(w * h), 1.0))
+            if fill_ratio < self.min_fill_ratio:
+                continue
+
+            confidence = float(
+                np.clip(
+                    0.45 * circularity
+                    + 0.25 * fill_ratio
+                    + 0.30 * min(area / max(self.min_contour_area * 4.0, 1.0), 1.0),
+                    0.0,
+                    1.0,
+                )
+            )
             detections.append(
                 PadDetection(
                     color=color_name,
                     centroid_px=(cx, cy),
                     area_px=area,
                     bbox_xywh=(x, y, w, h),
+                    radius_px=float(radius),
+                    circularity=circularity,
+                    fill_ratio=fill_ratio,
+                    confidence=confidence,
                 )
             )
 
         # Largest pads first (helps stable tracking if multiple are visible).
-        detections.sort(key=lambda d: d.area_px, reverse=True)
+        detections.sort(key=lambda d: (d.confidence, d.area_px), reverse=True)
         return detections
 
     def detect_pads(
@@ -150,4 +187,3 @@ class ColorDetector:
             debug_masks["blue"] = mask_blue
 
         return detections, debug_masks
-

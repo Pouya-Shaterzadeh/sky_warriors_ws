@@ -16,7 +16,7 @@ Docker
 #Build files
 install/
 log/
-config/
+/config/
 
 # PX4 dependencies (managed via vcs)
 px4_msgs/

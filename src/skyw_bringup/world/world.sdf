@@ -42,18 +42,18 @@
         <static>true</static>
         <pose>3 0 0.01 0 0 0</pose>
         <link name="link">
-            <visual name="visual"><geometry><cylinder><radius>0.8</radius><length>0.02</length></cylinder></geometry>
+            <visual name="visual"><geometry><cylinder><radius>1.5</radius><length>0.02</length></cylinder></geometry>
             <material><ambient>1.0 0.0 0.0 1</ambient><diffuse>1.0 0.0 0.0 1</diffuse></material></visual>
-            <collision name="collision"><geometry><cylinder><radius>0.8</radius><length>0.02</length></cylinder></geometry></collision>
+            <collision name="collision"><geometry><cylinder><radius>1.5</radius><length>0.02</length></cylinder></geometry></collision>
         </link>
     </model>
     <model name="landing_pad_blue">
         <static>true</static>
         <pose>-3 0 0.01 0 0 0</pose>
         <link name="link">
-            <visual name="visual"><geometry><cylinder><radius>0.8</radius><length>0.02</length></cylinder></geometry>
+            <visual name="visual"><geometry><cylinder><radius>1.5</radius><length>0.02</length></cylinder></geometry>
             <material><ambient>0.0 0.0 1.0 1</ambient><diffuse>0.0 0.0 1.0 1</diffuse></material></visual>
-            <collision name="collision"><geometry><cylinder><radius>0.8</radius><length>0.02</length></cylinder></geometry></collision>
+            <collision name="collision"><geometry><cylinder><radius>1.5</radius><length>0.02</length></cylinder></geometry></collision>
         </link>
     </model>
     <model name="starting_point">
@@ -61,14 +61,14 @@
         <pose>-7 5 0.01 0 0 0</pose>
         <link name="link">
             <visual name="visual"><geometry><cylinder><radius>0.8</radius><length>0.02</length></cylinder></geometry>
-            <material><ambient>0.0 0.0 1.0 1</ambient><diffuse>0.0 0.0 1.0 1</diffuse></material></visual>
+            <material><ambient>0.55 0.55 0.55 1</ambient><diffuse>0.55 0.55 0.55 1</diffuse></material></visual>
             <collision name="collision"><geometry><cylinder><radius>0.8</radius><length>0.02</length></cylinder></geometry></collision>
         </link>
     </model>
 
     <model name="wall_1">
       <static>true</static>
-      <pose>5 0 1 0 0 1.57</pose>
+      <pose>7.5 0 1 0 0 1.57</pose>
       <link name="link">
         <visual name="v_wall">
           <geometry>
@@ -109,7 +109,7 @@
 
     <model name="wall_2">
       <static>true</static>
-      <pose>2.5 4.33 1 0 0 2.62</pose>
+      <pose>3.75 6.495 1 0 0 2.62</pose>
       <link name="link">
         <visual name="v_wall">
           <geometry>
@@ -150,7 +150,7 @@
 
     <model name="wall_3">
       <static>true</static>
-      <pose>-2.5 4.33 1 0 0 3.66</pose>
+      <pose>-3.75 6.495 1 0 0 3.66</pose>
       <link name="link">
         <visual name="v_wall">
           <geometry>
@@ -191,7 +191,7 @@
 
     <model name="wall_4">
       <static>true</static>
-      <pose>-5 0 1 0 0 4.71</pose>
+      <pose>-7.5 0 1 0 0 4.71</pose>
       <link name="link">
         <visual name="v_wall">
           <geometry>
@@ -232,7 +232,7 @@
 
     <model name="wall_5">
       <static>true</static>
-      <pose>-2.5 -4.33 1 0 0 5.76</pose>
+      <pose>-3.75 -6.495 1 0 0 5.76</pose>
       <link name="link">
         <visual name="v_wall">
           <geometry>
@@ -273,7 +273,7 @@
 
     <model name="wall_6">
       <static>true</static>
-      <pose>2.5 -4.33 1 0 0 0.52</pose>
+      <pose>3.75 -6.495 1 0 0 0.52</pose>
       <link name="link">
         <visual name="v_wall">
           <geometry>

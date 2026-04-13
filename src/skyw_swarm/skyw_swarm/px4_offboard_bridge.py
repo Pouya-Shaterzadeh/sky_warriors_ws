@@ -127,11 +127,15 @@ class PX4OffboardBridge(Node):
                 self.get_logger().info(f"Engaging offboard mode for drone {i} via ROS Topic...")
                 self._send_vehicle_command(i, 176, 1.0, 6.0)
                 self.sent_offboard.add(i)
- 
+
             if self.auto_arm and i not in self.sent_arm and self.offboard_ticks[i] >= 140:
                 self.get_logger().info(f"Arming drone {i} via ROS Topic...")
                 self._send_vehicle_command(i, 400, 1.0, 0.0)
                 self.sent_arm.add(i)
+
+            # Periodic offboard re-engagement as GCS heartbeat (~every 5 s)
+            if i in self.sent_offboard and self.offboard_ticks[i] % 100 == 0:
+                self._send_vehicle_command(i, 176, 1.0, 6.0)
 
     @staticmethod
     def _yaw_from_quaternion(msg):

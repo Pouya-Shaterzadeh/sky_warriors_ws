@@ -14,14 +14,17 @@ Phase 2 behaviour
 -----------------
 * Drone 1 (x500_mono_cam_1): After takeoff hold, flies to each QR wall
   waypoint and hovers while the QR detector reads the code.
-* Drones 2 & 3 (x500_2, x500_3): Kept in a safe follower/hover position
-  behind the start zone until the QR payload is decoded.
+* Drones 2 & 3 (x500_mono_cam_down_2, x500_mono_cam_down_3): carry
+  downward-facing cameras, build a shared red/blue pad map, and feed
+  the final landing decision.
 """
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
@@ -107,6 +110,8 @@ def generate_launch_description():
     # State machine:   TAKEOFF → TRANSIT_TO_WALL → HOLD_AND_SCAN → MISSION_DONE
     #
     # Drone 1: flies to the QR wall scan point and hovers while the detector runs.
+    # Scan waypoints assume the walls are on a wider radius-7.5 hexagon and keep
+    # roughly 1 m inward stand-off from each wall for QR readability.
     # Drones 2 & 3: held at (-7, 5+offset, takeoff_z) – safe follower/hover
     #               behind the start zone until QR is decoded.
     #
@@ -129,6 +134,26 @@ def generate_launch_description():
             'takeoff_hold_s':       takeoff_hold,
             # Max time to wait for a QR decode before declaring timeout.
             'target_hold_s':        target_hold,
+            # Final simultaneous landing zone geometry and safety thresholds.
+            'landing_zone_radius_m': 1.5,
+            'landing_slot_radius_m': 0.75,
+            'landing_stage_radius_m': 2.25,
+            'landing_min_separation_m': 1.0,
+            'landing_slot_tolerance_m': 0.50,
+            'landing_pad_lock_confidence_min': 0.60,
+            'landing_pad_lock_jitter_max_m': 0.40,
+            'landing_pad_lock_dwell_s': 2.0,
+            'landing_retry_backoff_s': 2.0,
+            'landing_pad_search_z': -5.0,
+            'landing_pad_search_timeout_s': 30.0,
+            'landing_pad_fallback_max_age_s': 60.0,
+            'landing_pad_fallback_confidence_min': 0.40,
+            'landing_pad_fallback_min_detections': 2,
+            'landing_pad_search_log_period_s': 1.0,
+            'landing_abort_on_missing_lock': True,
+            'landing_slot_hover_z': -2.0,
+            'landing_sync_release_z': -0.75,
+            'landing_sync_duration_s': 3.0,
         }],
     )
 
@@ -168,11 +193,28 @@ def generate_launch_description():
             'decoded_topic':           decoded_topic,
             # Show OpenCV overlay window with detected QR bounding box.
             'enable_visualization':    True,
+            # Keep the Drone 1 QR feed compact on screen.
+            'visualization_scale':     0.35,
             # Grayscale binary-threshold before pyzbar (tune if detection is poor).
             'binary_threshold':        45,
             # Only re-publish when the decoded string changes.
             'publish_only_on_change':  True,
         }],
+    )
+
+    # ── 2f. Downward-camera landing-pad detection stack ──────────────────
+    # Drones 2 and 3 bridge their downward mono cameras into ROS, detect
+    # red/blue pads in world coordinates, and fuse them into a shared
+    # registry that the mission sequencer uses after the last QR wall.
+    pad_detection_stack = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [FindPackageShare('skyw_detection'), 'launch', 'swarm_pad_detection.launch.py']
+            )
+        ),
+        launch_arguments={
+            'world_name': world_name,
+        }.items(),
     )
 
     # ══════════════════════════════════════════════════════════════════════
@@ -240,13 +282,14 @@ def generate_launch_description():
             default_value='3.0',
             description=(
                 'Drone 1 QR scan X position in PX4 local frame. '
-                'wall_1 is at Gz X=5; drone hovers ~2 m in front.'
+                'Legacy per-wall override only; mission_sequencer uses its own '
+                'hexagon waypoint table with ~1 m stand-off from the widened walls.'
             ),
         ),
         DeclareLaunchArgument(
             'wall_y',
             default_value='0.0',
-            description='Drone 1 QR scan Y position in PX4 local frame.',
+            description='Legacy per-wall override; mission_sequencer uses its internal waypoint table.',
         ),
         DeclareLaunchArgument(
             'wall_z',
@@ -259,7 +302,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'wall_yaw',
             default_value='1.5708',
-            description='Drone 1 heading at scan point (rad). 1.5708 rad faces +X → wall_1.',
+            description='Legacy heading override; mission_sequencer uses per-wall yaw values internally.',
         ),
         DeclareLaunchArgument(
             'takeoff_hold_s',
@@ -281,4 +324,5 @@ def generate_launch_description():
         mission_sequencer,
         offboard_bridge,
         qr_detector,
+        pad_detection_stack,
     ])

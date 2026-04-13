@@ -24,6 +24,7 @@ class QrCodeDetectorNode(Node):
         self.declare_parameter("enable_visualization", True)
         self.declare_parameter("binary_threshold", 45)
         self.declare_parameter("publish_only_on_change", True)
+        self.declare_parameter("visualization_scale", 0.35)
 
         self._bridge = CvBridge()
         self._last_decoded: str | None = None
@@ -32,6 +33,9 @@ class QrCodeDetectorNode(Node):
         self._enable_viz = bool(self.get_parameter("enable_visualization").value)
         self._thresh = int(self.get_parameter("binary_threshold").value)
         self._publish_only_on_change = bool(self.get_parameter("publish_only_on_change").value)
+        self._visualization_scale = max(
+            0.1, float(self.get_parameter("visualization_scale").value)
+        )
 
         out_topic = str(self.get_parameter("decoded_topic").value)
         self._pub = self.create_publisher(String, out_topic, 10)
@@ -93,12 +97,9 @@ class QrCodeDetectorNode(Node):
             )
 
         if self._enable_viz:
-            # Scale down for a smaller, more compact GUI window
-            display_scale = 0.5
-            width = int(image.shape[1] * display_scale)
-            height = int(image.shape[0] * display_scale)
+            width = max(1, int(round(image.shape[1] * self._visualization_scale)))
+            height = max(1, int(round(image.shape[0] * self._visualization_scale)))
             small_img = cv2.resize(image, (width, height), interpolation=cv2.INTER_AREA)
-            
             cv2.imshow("Camera output", small_img)
             cv2.waitKey(1)
 
